@@ -1,0 +1,758 @@
+﻿
+===== config.py =====
+"""Central configuration. All rules and volumes live here (see docs/decisions.md)."""
+import calendar
+from dataclasses import dataclass
+from datetime import date, timedelta
+from decimal import Decimal
+
+SEED = 20261022
+YEAR = 2026
+MONTHS = (1, 2, 3)
+SUBMISSION_GRACE_DAYS = 5  # a submission after period end + 5 days is late
+
+
+@dataclass(frozen=True)
+class PayPeriodDef:
+    pay_period_id: str
+    start_date: date
+    end_date: date
+    working_days: int          # Monday to Friday, no holiday calendar
+    submission_deadline: date
+
+
+def _build_periods():
+    periods = []
+    for month in MONTHS:
+        last_day = calendar.monthrange(YEAR, month)[1]
+        start, end = date(YEAR, month, 1), date(YEAR, month, last_day)
+        working = sum(1 for d in range(last_day)
+                      if (start + timedelta(days=d)).weekday() < 5)
+        periods.append(PayPeriodDef(
+            pay_period_id=f"PP-{YEAR}-{month:02d}",
+            start_date=start,
+            end_date=end,
+            working_days=working,
+            submission_deadline=end + timedelta(days=SUBMISSION_GRACE_DAYS),
+        ))
+    return tuple(periods)
+
+
+PAY_PERIODS = _build_periods()
+PERIOD_START = PAY_PERIODS[0].start_date
+PERIOD_END = PAY_PERIODS[-1].end_date
+
+
+@dataclass(frozen=True)
+class PayGroupDef:
+    pay_group_id: str
+    name: str
+    share: float                  # share of all employees
+    hourly_share: float           # share of this group paid hourly
+    standard_hours_per_day: Decimal
+    max_hours_per_period: Decimal
+    overtime_multiplier: Decimal
+    payday_day: int               # day of the month after the period ends
+
+
+PAY_GROUPS = (
+    PayGroupDef("PG-001", "Corporate", 0.40, 0.10, Decimal("8.00"), Decimal("210.00"), Decimal("1.50"), 5),
+    PayGroupDef("PG-002", "Operations", 0.40, 0.62, Decimal("8.00"), Decimal("230.00"), Decimal("2.00"), 7),
+    PayGroupDef("PG-003", "Contract", 0.20, 0.45, Decimal("8.00"), Decimal("200.00"), Decimal("1.25"), 10),
+)
+PAY_GROUP_BY_ID = {g.pay_group_id: g for g in PAY_GROUPS}
+
+
+@dataclass(frozen=True)
+class Scale:
+    name: str
+    n_employees: int
+    anomalies_per_type: int
+
+
+SCALES = {
+    "starter": Scale("starter", n_employees=300, anomalies_per_type=3),
+    "full": Scale("full", n_employees=3000, anomalies_per_type=40),
+}
+
+# ---------------------------------------------------------------- employees
+HOURLY_RATE_RANGE = (150, 600)         # INR per hour
+MONTHLY_SALARY_RANGE = (25000, 150000)  # INR per month
+ROLE_SHARES = {"hr_partner": 0.01, "manager": 0.08}  # the rest are employees
+PARTIAL_PERIOD_SHARE = 0.02            # hired or terminated during the period
+MISSING_BANK_RATE = 0.01               # planted validation cases, labelled
+MISSING_TAX_RATE = 0.01
+
+# ------------------------------------------------------ source records
+APPROVAL_SHARES = (("approved", 0.93), ("pending", 0.05), ("rejected", 0.02))
+CORRECTION_RATE = 0.02                 # share of time entries with a correction
+DUPLICATE_RATE = 0.01                  # share of time entries with a duplicate submission
+LATE_SUBMISSION_RATE = 0.03
+OVERTIME_DAY_RATE = 0.12               # share of days with hours above standard
+DAILY_OUTLIER_RATE = 0.002             # days with hours above the outlier threshold
+
+# ---------------------------------------------------------------- leave
+UNPAID_LEAVE_RATE = 0.06               # salaried employees with unpaid leave per period
+PAID_LEAVE_RATE = 0.18                 # salaried employees with annual or sick leave per period
+
+# ------------------------------------------------- allowances and deductions
+ALLOWANCE_RATES = {
+    "transport": Decimal("2000.00"),    # all active, 1 unit per period
+    "meal": Decimal("100.00"),          # hourly, per day worked
+    "remote_work": Decimal("1500.00"),  # salaried in Corporate, 1 unit per period
+    "shift": Decimal("250.00"),         # hourly in Operations, per day worked
+}
+PROVIDENT_FUND_RATE = Decimal("0.12")   # salaried, of monthly_salary
+PROFESSIONAL_TAX = Decimal("200.00")    # all active
+LOAN_SHARE = 0.08                       # employees with a loan installment
+LOAN_INSTALLMENTS = (1000, 2000, 3000, 5000)
+
+# ------------------------------------------------------------- validation
+DAILY_HOURS_OUTLIER = Decimal("14.00")
+RECONCILIATION_TOLERANCE = Decimal("0.01")
+MIN_NET_PAY = Decimal("0.00")
+
+# ------------------------------------------------- exceptions and export
+BLOCKING_RESOLVE_RATE = 0.85           # blocking exceptions fixed by a correction or rejection
+WARNING_WAIVE_RATE = 0.50              # warning exceptions waived by an HR partner
+
+
+# ------------------------------------------------------------- time entries
+ABSENCE_RATE = 0.04                    # working days an hourly employee has no entry
+
+
+# -------------------------------------------------------------------- leave
+LEAVE_CORRECTION_RATE = 0.05           # share of approved leave records with a correction
+
+===== requirements.txt =====
+fastapi
+uvicorn
+pydantic
+pytest
+
+===== datagen\ids.py =====
+"""Deterministic ID generation (see docs/decisions.md section 12)."""
+import re
+from datetime import date
+
+YEAR = 2026
+
+# kind -> (format string, validation regex)
+_FORMATS = {
+    "employee": ("EMP-{n:06d}", r"^EMP-\d{6}$"),
+    "pay_group": ("PG-{n:03d}", r"^PG-\d{3}$"),
+    "leave": ("LV-{n:06d}", r"^LV-\d{6}$"),
+    "allowance": ("ALW-{n:06d}", r"^ALW-\d{6}$"),
+    "deduction": ("DED-{n:06d}", r"^DED-\d{6}$"),
+    "rule": ("VR-{n:03d}", r"^VR-\d{3}$"),
+    "exception": ("EXC-{n:06d}", r"^EXC-\d{6}$"),
+    "approval": ("APR-{n:06d}", r"^APR-\d{6}$"),
+    "export": (f"PEX-{YEAR}-{{n:06d}}", r"^PEX-\d{4}-\d{6}$"),
+    "export_line": ("PXL-{n:06d}", r"^PXL-\d{6}$"),
+}
+
+# kinds built from other ids, not from a counter
+_COMPOSED = {
+    "pay_period": r"^PP-\d{4}-\d{2}$",
+    "time_entry": r"^TIME-EMP-\d{6}-\d{4}-\d{2}-\d{2}(-[CD]\d)?$",
+    "payroll_input": r"^PIN-EMP-\d{6}-\d{4}-\d{2}$",
+}
+
+
+class IdGenerator:
+    """One counter per entity type. Counters only go up."""
+
+    def __init__(self):
+        self._counters = {key: 0 for key in _FORMATS}
+
+    def next(self, kind: str) -> str:
+        self._counters[kind] += 1
+        return _FORMATS[kind][0].format(n=self._counters[kind])
+
+    @staticmethod
+    def period_id(month: int) -> str:
+        """PP-2026-01"""
+        return f"PP-{YEAR}-{month:02d}"
+
+    @staticmethod
+    def time_entry_id(employee_id: str, work_date: date, suffix: str = None) -> str:
+        """TIME-<employee-id>-<date>; suffix 'C1' (correction) or 'D1' (duplicate)."""
+        base = f"TIME-{employee_id}-{work_date.isoformat()}"
+        return f"{base}-{suffix}" if suffix else base
+
+    @staticmethod
+    def payroll_input_id(employee_id: str, month: int) -> str:
+        """PIN-<employee-id>-2026-01"""
+        return f"PIN-{employee_id}-{YEAR}-{month:02d}"
+
+
+def is_valid(kind: str, value: str) -> bool:
+    pattern = _FORMATS[kind][1] if kind in _FORMATS else _COMPOSED[kind]
+    return re.match(pattern, value) is not None
+
+===== datagen\leave.py =====
+"""LeaveRecord generation (see docs/data_dictionary.md and docs/decisions.md)."""
+from datetime import datetime, time, timedelta
+
+import config
+from datagen.time_entries import _decision, _working_days
+
+PAID_TYPES = ("annual", "sick")
+LENGTHS = {
+    "annual": ((1, 0.35), (2, 0.25), (3, 0.20), (4, 0.10), (5, 0.10)),
+    "sick": ((1, 0.60), (2, 0.30), (3, 0.10)),
+    "unpaid": ((1, 0.30), (2, 0.30), (3, 0.20), (4, 0.10), (5, 0.10)),
+}
+MIN_GAP = 2  # working days kept free between two blocks, so a correction can add a day
+
+
+def _try_add(rng, n, leave_type, blocks):
+    """Places a block of working days inside 0..n-1 without touching other blocks.
+    Skips silently after 20 failed attempts."""
+    lengths = [x for x, _ in LENGTHS[leave_type]]
+    weights = [w for _, w in LENGTHS[leave_type]]
+    length = rng.choices(lengths, weights)[0]
+    if n - length < 1:
+        return
+    for _ in range(20):
+        start = rng.randrange(0, n - length)  # leaves room for a +1 day correction
+        if all(not (start < s + l + MIN_GAP and s < start + length + MIN_GAP)
+               for s, l, _ in blocks):
+            blocks.append((start, length, leave_type))
+            return
+
+
+def _row(ids, emp, period, leave_type, elig, start, length, entry_type, related_id, d):
+    return {
+        "leave_id": ids.next("leave"),
+        "employee_id": emp["employee_id"],
+        "pay_period_id": period.pay_period_id,
+        "leave_type": leave_type,
+        "start_date": elig[start],
+        "end_date": elig[start + length - 1],
+        "days": length,
+        "entry_type": entry_type,
+        "related_leave_id": related_id,
+        "submitted_at": d["submitted"],
+        "approval_status": d["status"],
+        "approved_by": d["by"],
+        "approved_at": d["at"],
+    }
+
+
+def generate_leave_records(rng, ids, employees):
+    rows = []
+    eligible = sorted((e for e in employees
+                       if e["pay_type"] == "salaried" and e["manager_id"] is not None),
+                      key=lambda e: e["employee_id"])
+    for period in config.PAY_PERIODS:
+        working = _working_days(period)
+        for emp in eligible:
+            last_ok = emp["termination_date"] or config.PERIOD_END
+            elig = [d for d in working if emp["hire_date"] <= d <= last_ok]
+            n = len(elig)
+            if n < 6:
+                continue
+
+            blocks = []  # (start index, length, leave_type)
+            if rng.random() < config.UNPAID_LEAVE_RATE:
+                _try_add(rng, n, "unpaid", blocks)
+            if rng.random() < config.PAID_LEAVE_RATE:
+                _try_add(rng, n, rng.choice(PAID_TYPES), blocks)
+
+            for start, length, leave_type in sorted(blocks):
+                submitted = (datetime.combine(elig[start], time(9, 0))
+                             - timedelta(days=rng.randint(1, 10))
+                             + timedelta(minutes=rng.randrange(480)))
+                submitted = max(submitted, datetime.combine(emp["hire_date"], time(9, 0)))
+                d = _decision(rng, submitted, emp["manager_id"])
+                original = _row(ids, emp, period, leave_type, elig, start, length,
+                                "original", None, d)
+                rows.append(original)
+
+                if d["status"] == "approved" and rng.random() < config.LEAVE_CORRECTION_RATE:
+                    new_len = length + (1 if length == 1 or rng.random() < 0.5 else -1)
+                    c_submitted = submitted + timedelta(hours=rng.randint(24, 120))
+                    cd = _decision(rng, c_submitted, emp["manager_id"])
+                    rows.append(_row(ids, emp, period, leave_type, elig, start, new_len,
+                                     "correction", original["leave_id"], cd))
+    return rows
+
+
+def effective_leave_records(leaves):
+    """original leave_id -> the record that counts: the approved correction if there
+    is one, otherwise the approved original. Pending and rejected rows never count."""
+    originals, corrections = {}, {}
+    for r in leaves:
+        if r["entry_type"] == "original":
+            originals[r["leave_id"]] = r
+        else:
+            corrections[r["related_leave_id"]] = r
+    result = {}
+    for leave_id, original in originals.items():
+        corr = corrections.get(leave_id)
+        if corr and corr["approval_status"] == "approved":
+            result[leave_id] = corr
+        elif original["approval_status"] == "approved":
+            result[leave_id] = original
+    return result
+
+===== datagen\master.py =====
+"""Master data: PayGroup, PayPeriod and Employee (see docs/data_dictionary.md)."""
+import string
+from datetime import date, timedelta
+from decimal import Decimal
+
+import config
+
+CENT = Decimal("0.01")
+HIRE_FLOOR = date(2018, 1, 1)
+HIRE_SPAN = (date(2025, 12, 31) - HIRE_FLOOR).days
+
+FIRST_NAMES = (
+    "Aarav", "Vivaan", "Ananya", "Diya", "Rohan", "Priya", "Karan", "Sneha",
+    "Arjun", "Kavya", "Rahul", "Meera", "Imran", "Fatima", "Suresh", "Lakshmi",
+    "Vikram", "Anjali", "Manoj", "Pooja", "Harsha", "Divya", "Nikhil", "Swati",
+)
+LAST_NAMES = (
+    "Sharma", "Reddy", "Rao", "Khan", "Patel", "Nair", "Iyer", "Gupta",
+    "Singh", "Das", "Mehta", "Verma", "Joshi", "Menon", "Naidu", "Kapoor",
+)
+
+
+def generate_pay_groups():
+    return [{
+        "pay_group_id": g.pay_group_id,
+        "name": g.name,
+        "pay_frequency": "monthly",
+        "standard_hours_per_day": g.standard_hours_per_day,
+        "max_hours_per_period": g.max_hours_per_period,
+        "overtime_multiplier": g.overtime_multiplier,
+        "payday_day": g.payday_day,
+        "effective_from": config.PERIOD_START,
+        "status": "active",
+    } for g in config.PAY_GROUPS]
+
+
+def generate_pay_periods():
+    return [{
+        "pay_period_id": p.pay_period_id,
+        "start_date": p.start_date,
+        "end_date": p.end_date,
+        "working_days": p.working_days,
+        "submission_deadline": p.submission_deadline,
+        "status": "open",  # moved forward later by Approval and PayrollExport events
+    } for p in config.PAY_PERIODS]
+
+
+def generate_employees(rng, ids, scale):
+    """Returns (employees, planted). planted lists the deliberate missing bank
+    and tax cases, to be turned into ground truth later."""
+    n = scale.n_employees
+    emp_ids = [ids.next("employee") for _ in range(n)]
+
+    # pay groups, shuffled so ids do not line up with groups
+    counts = [round(n * g.share) for g in config.PAY_GROUPS]
+    counts[-1] = n - sum(counts[:-1])
+    group_of = [g.pay_group_id for g, c in zip(config.PAY_GROUPS, counts) for _ in range(c)]
+    rng.shuffle(group_of)
+    members = {g.pay_group_id: [i for i in range(n) if group_of[i] == g.pay_group_id]
+               for g in config.PAY_GROUPS}
+
+    # roles: managers in every group, HR partners in the first group (Corporate)
+    role = ["employee"] * n
+    managers = {}
+    for gid, idxs in members.items():
+        k = max(2, round(len(idxs) * config.ROLE_SHARES["manager"]))
+        managers[gid] = sorted(rng.sample(idxs, k))
+        for i in managers[gid]:
+            role[i] = "manager"
+    pool = [i for i in members[config.PAY_GROUPS[0].pay_group_id] if role[i] == "employee"]
+    for i in sorted(rng.sample(pool, max(2, round(n * config.ROLE_SHARES["hr_partner"])))):
+        role[i] = "hr_partner"
+
+    # employees who start or leave during the period (never managers or HR partners)
+    candidates = [i for i in range(n) if role[i] == "employee"]
+    k = round(n * config.PARTIAL_PERIOD_SHARE)
+    partial = rng.sample(candidates, k)
+    hired_in_period = set(partial[: k // 2])
+    terminated = set(partial[k // 2:])
+
+    # deliberate missing fields (labelled later); fixed counts, at least 2 each
+    no_bank = set(rng.sample(range(n), max(2, round(n * config.MISSING_BANK_RATE))))
+    no_tax = set(rng.sample(range(n), max(2, round(n * config.MISSING_TAX_RATE))))
+    tax_numbers = rng.sample(range(10_000_000, 100_000_000), n)
+    accounts = rng.sample(range(10 ** 11, 10 ** 12), n)
+
+    employees, planted = [], []
+    for i in range(n):
+        gid = group_of[i]
+        group = config.PAY_GROUP_BY_ID[gid]
+        eid = emp_ids[i]
+
+        if role[i] != "employee" or rng.random() >= group.hourly_share:
+            pay_type = "salaried"
+        else:
+            pay_type = "hourly"
+
+        first, last = rng.choice(FIRST_NAMES), rng.choice(LAST_NAMES)
+
+        if role[i] == "manager":
+            head = managers[gid][0]
+            manager_id = None if i == head else emp_ids[head]
+        else:
+            manager_id = emp_ids[rng.choice(managers[gid])]
+
+        if i in hired_in_period:
+            hire = config.PERIOD_START + timedelta(days=rng.randrange(5, 50))
+            term = None
+        else:
+            hire = HIRE_FLOOR + timedelta(days=rng.randrange(HIRE_SPAN))
+            term = None
+            if i in terminated:
+                term = config.PERIOD_START + timedelta(days=rng.randrange(35, 80))
+
+        if i in no_bank:
+            bank = ifsc = None
+            planted.append({"issue_type": "missing_bank_details", "table_name": "employees",
+                            "record_id": eid, "expected_rule": "VR-001"})
+        else:
+            bank = str(accounts[i])
+            ifsc = ("".join(rng.choices(string.ascii_uppercase, k=4))
+                    + "0" + f"{rng.randrange(10 ** 6):06d}")
+
+        if i in no_tax:
+            tax_id = None
+            planted.append({"issue_type": "missing_tax_id", "table_name": "employees",
+                            "record_id": eid, "expected_rule": "VR-002"})
+        else:
+            tax_id = f"TIN-{tax_numbers[i]}"
+
+        low, high = config.HOURLY_RATE_RANGE, config.MONTHLY_SALARY_RANGE
+        employees.append({
+            "employee_id": eid,
+            "first_name": first,
+            "last_name": last,
+            "email": f"{first.lower()}.{last.lower()}.{i + 1:06d}@example.com",
+            "role": role[i],
+            "manager_id": manager_id,
+            "pay_group_id": gid,
+            "pay_type": pay_type,
+            "hourly_rate": (Decimal(rng.randint(*low)).quantize(CENT)
+                            if pay_type == "hourly" else None),
+            "monthly_salary": (Decimal(rng.randrange(high[0], high[1] + 1, 500)).quantize(CENT)
+                               if pay_type == "salaried" else None),
+            "hire_date": hire,
+            "termination_date": term,
+            "status": "terminated" if term else "active",
+            "bank_account_number": bank,
+            "bank_ifsc": ifsc,
+            "tax_id": tax_id,
+        })
+    return employees, planted
+
+===== datagen\pay_items.py =====
+"""Allowance and Deduction generation (see docs/data_dictionary.md and docs/decisions.md)."""
+from collections import Counter, defaultdict
+from datetime import datetime, time, timedelta
+from decimal import ROUND_HALF_UP, Decimal
+
+import config
+from datagen.leave import effective_leave_records
+from datagen.time_entries import _decision, effective_time_entries
+
+CENT = Decimal("0.01")
+D = Decimal
+CORPORATE = config.PAY_GROUPS[0].pay_group_id
+OPERATIONS = config.PAY_GROUPS[1].pay_group_id
+
+
+def _money(x):
+    return x.quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def _active(emp, period):
+    return (emp["hire_date"] <= period.end_date
+            and (emp["termination_date"] is None
+                 or emp["termination_date"] >= period.start_date))
+
+
+def _created_at(rng, period):
+    return (datetime.combine(period.end_date + timedelta(days=1), time(9, 0))
+            + timedelta(minutes=rng.randrange(2 * 24 * 60)))
+
+
+def _auto_approved(rng, created, approver_id):
+    return {"submitted": created, "status": "approved", "by": approver_id,
+            "at": created + timedelta(hours=rng.randint(1, 72))}
+
+
+def _hr_ids(employees):
+    return sorted(e["employee_id"] for e in employees if e["role"] == "hr_partner")
+
+
+def generate_allowances(rng, ids, employees, time_entries):
+    effective = effective_time_entries(time_entries)
+    days = Counter((e["employee_id"], e["pay_period_id"]) for e in effective.values())
+    hr_ids = _hr_ids(employees)
+
+    rows = []
+    for period in config.PAY_PERIODS:
+        for emp in sorted(employees, key=lambda e: e["employee_id"]):
+            if not _active(emp, period):
+                continue
+            worked = days[(emp["employee_id"], period.pay_period_id)]
+            wanted = [("transport", 1)]
+            if emp["pay_type"] == "hourly":
+                if worked:
+                    wanted.append(("meal", worked))
+                    if emp["pay_group_id"] == OPERATIONS:
+                        wanted.append(("shift", worked))
+            elif emp["pay_group_id"] == CORPORATE:
+                wanted.append(("remote_work", 1))
+
+            for a_type, units in wanted:
+                created = _created_at(rng, period)
+                approver = emp["manager_id"] or rng.choice(hr_ids)  # group heads have no manager
+                d = _decision(rng, created, approver)
+                rate = config.ALLOWANCE_RATES[a_type]
+                rows.append({
+                    "allowance_id": ids.next("allowance"),
+                    "employee_id": emp["employee_id"],
+                    "pay_period_id": period.pay_period_id,
+                    "allowance_type": a_type,
+                    "units": units,
+                    "unit_amount": rate,
+                    "amount": _money(rate * units),
+                    "entry_type": "original",
+                    "related_allowance_id": None,
+                    "created_at": created,
+                    "approval_status": d["status"],
+                    "approved_by": d["by"],
+                    "approved_at": d["at"],
+                })
+    return rows
+
+
+def generate_deductions(rng, ids, employees, leaves):
+    ordered = sorted(employees, key=lambda e: e["employee_id"])
+    hr_ids = _hr_ids(employees)
+
+    k = round(len(ordered) * config.LOAN_SHARE)
+    loans = {e["employee_id"]: rng.choice(config.LOAN_INSTALLMENTS)
+             for e in rng.sample(ordered, k)}
+
+    unpaid = defaultdict(list)  # (employee_id, pay_period_id) -> effective unpaid leave
+    for r in effective_leave_records(leaves).values():
+        if r["leave_type"] == "unpaid":
+            unpaid[(r["employee_id"], r["pay_period_id"])].append(r)
+
+    rows = []
+    for period in config.PAY_PERIODS:
+        for emp in ordered:
+            if not _active(emp, period):
+                continue
+            eid = emp["employee_id"]
+            items = []  # (type, leave_id, units, unit_amount, always_approved)
+            if emp["pay_type"] == "salaried":
+                items.append(("provident_fund", None, D("1.00"),
+                              _money(emp["monthly_salary"] * config.PROVIDENT_FUND_RATE), True))
+            items.append(("professional_tax", None, D("1.00"), config.PROFESSIONAL_TAX, True))
+            if eid in loans:
+                items.append(("loan_recovery", None, D("1.00"), D(loans[eid]).quantize(CENT), False))
+            for r in sorted(unpaid.get((eid, period.pay_period_id), []),
+                            key=lambda r: r["leave_id"]):
+                daily = _money(emp["monthly_salary"] / period.working_days)
+                items.append(("unpaid_leave", r["leave_id"], D(r["days"]).quantize(CENT), daily, True))
+
+            for d_type, leave_id, units, unit_amount, auto in items:
+                created = _created_at(rng, period)
+                approver = rng.choice(hr_ids)
+                d = (_auto_approved(rng, created, approver) if auto
+                     else _decision(rng, created, approver))
+                rows.append({
+                    "deduction_id": ids.next("deduction"),
+                    "employee_id": eid,
+                    "pay_period_id": period.pay_period_id,
+                    "deduction_type": d_type,
+                    "leave_id": leave_id,
+                    "units": units,
+                    "unit_amount": unit_amount,
+                    "amount": _money(units * unit_amount),
+                    "entry_type": "original",
+                    "related_deduction_id": None,
+                    "created_at": created,
+                    "approval_status": d["status"],
+                    "approved_by": d["by"],
+                    "approved_at": d["at"],
+                })
+    return rows
+
+===== datagen\time_entries.py =====
+"""TimeEntry generation (see docs/data_dictionary.md and docs/decisions.md section 6)."""
+from datetime import datetime, time, timedelta
+from decimal import Decimal
+
+import config
+from datagen.ids import IdGenerator
+
+D = Decimal
+OVERTIME_EXTRA = (D("1.00"), D("1.50"), D("2.00"), D("2.50"), D("3.00"))
+SHORT_DAY_CHANGE = (D("-1.00"), D("-0.50"), D("-0.25"), D("0.00"),
+                    D("0.00"), D("0.00"), D("0.00"), D("0.00"))
+CORRECTION_DELTA = (D("-2.00"), D("-1.00"), D("-0.50"), D("0.50"), D("1.00"), D("2.00"))
+MIN_HOURS, MAX_HOURS = D("1.00"), D("12.00")
+QUARTER = D("0.25")
+STATUSES = [s for s, _ in config.APPROVAL_SHARES]
+STATUS_WEIGHTS = [w for _, w in config.APPROVAL_SHARES]
+
+
+def _working_days(period):
+    span = (period.end_date - period.start_date).days + 1
+    days = [period.start_date + timedelta(days=i) for i in range(span)]
+    return [d for d in days if d.weekday() < 5]
+
+
+def _decision(rng, submitted, manager_id):
+    """Approval fields for a new row, decided when it is created."""
+    status = rng.choices(STATUSES, STATUS_WEIGHTS)[0]
+    if status == "pending":
+        return {"submitted": submitted, "status": status, "by": None, "at": None}
+    return {"submitted": submitted, "status": status, "by": manager_id,
+            "at": submitted + timedelta(hours=rng.randint(1, 72))}
+
+
+def _plan_day(rng, emp, standard, period, work_date):
+    if rng.random() < config.OVERTIME_DAY_RATE:
+        hours = standard + rng.choice(OVERTIME_EXTRA)
+    else:
+        hours = standard + rng.choice(SHORT_DAY_CHANGE)
+    outlier = rng.random() < config.DAILY_OUTLIER_RATE
+    if outlier:
+        hours = D(rng.randrange(57, 73)) * QUARTER  # 14.25 to 18.00
+    late = rng.random() < config.LATE_SUBMISSION_RATE
+    if late:
+        submitted = (datetime.combine(period.submission_deadline, time(9, 0))
+                     + timedelta(days=rng.randint(1, 4), minutes=rng.randrange(600)))
+    else:
+        submitted = (datetime.combine(work_date, time(18, 0))
+                     + timedelta(minutes=rng.randrange(2 * 24 * 60)))
+
+    day = {"work_date": work_date, "hours": hours, "outlier": outlier,
+           "late": late, "corr": None, "dup": None,
+           **_decision(rng, submitted, emp["manager_id"])}
+
+    if (day["status"] == "approved" and not outlier and not late
+            and rng.random() < config.CORRECTION_RATE):
+        new = max(MIN_HOURS, min(MAX_HOURS, hours + rng.choice(CORRECTION_DELTA)))
+        if new == hours:
+            new = hours + D("0.50") if hours + D("0.50") <= MAX_HOURS else hours - D("0.50")
+        c_submitted = submitted + timedelta(hours=rng.randint(6, 48))
+        day["corr"] = {"hours": new, **_decision(rng, c_submitted, emp["manager_id"])}
+
+    if not late and rng.random() < config.DUPLICATE_RATE:
+        d_submitted = submitted + timedelta(minutes=rng.randint(1, 600))
+        day["dup"] = _decision(rng, d_submitted, emp["manager_id"])
+    return day
+
+
+def _cap_hours(days, standard, cap):
+    """Keeps the baseline under the pay group maximum: the biggest days are reset to
+    standard hours until the period total (counting every correction) fits."""
+    def effective(d):
+        return d["corr"]["hours"] if d["corr"] else d["hours"]
+
+    if sum(effective(d) for d in days) <= cap:
+        return
+    for d in sorted(days, key=effective, reverse=True):
+        d["hours"], d["corr"], d["outlier"] = standard, None, False
+        if sum(effective(x) for x in days) <= cap:
+            return
+
+
+def _row(entry_id, emp, period, work_date, hours, entry_type, related_id, d):
+    return {
+        "time_entry_id": entry_id,
+        "employee_id": emp["employee_id"],
+        "pay_period_id": period.pay_period_id,
+        "work_date": work_date,
+        "hours_worked": hours,
+        "entry_type": entry_type,
+        "related_entry_id": related_id,
+        "submitted_at": d["submitted"],
+        "approval_status": d["status"],
+        "approved_by": d["by"],
+        "approved_at": d["at"],
+    }
+
+
+def generate_time_entries(rng, employees):
+    """Returns (time_entries, planted). planted lists the deliberate baseline
+    validation cases (duplicates, outliers, late submissions) for ground truth."""
+    entries, planted = [], []
+    hourly = sorted((e for e in employees if e["pay_type"] == "hourly"),
+                    key=lambda e: e["employee_id"])
+
+    def plant(issue, record_id, rule):
+        planted.append({"issue_type": issue, "table_name": "time_entries",
+                        "record_id": record_id, "expected_rule": rule})
+
+    for period in config.PAY_PERIODS:
+        working = _working_days(period)
+        for emp in hourly:
+            group = config.PAY_GROUP_BY_ID[emp["pay_group_id"]]
+            standard = group.standard_hours_per_day
+            last_ok = emp["termination_date"] or config.PERIOD_END
+
+            days = []
+            for work_date in working:
+                if work_date < emp["hire_date"] or work_date > last_ok:
+                    continue
+                if rng.random() < config.ABSENCE_RATE:
+                    continue
+                days.append(_plan_day(rng, emp, standard, period, work_date))
+            _cap_hours(days, standard, group.max_hours_per_period)
+
+            for d in days:
+                wd = d["work_date"]
+                original_id = IdGenerator.time_entry_id(emp["employee_id"], wd)
+                entries.append(_row(original_id, emp, period, wd, d["hours"],
+                                    "original", None, d))
+                if d["outlier"]:
+                    plant("daily_hours_outlier", original_id, "VR-005")
+                if d["late"]:
+                    plant("late_submission", original_id, "VR-012")
+                if d["corr"]:
+                    entries.append(_row(
+                        IdGenerator.time_entry_id(emp["employee_id"], wd, "C1"),
+                        emp, period, wd, d["corr"]["hours"], "correction",
+                        original_id, d["corr"]))
+                if d["dup"]:
+                    dup_id = IdGenerator.time_entry_id(emp["employee_id"], wd, "D1")
+                    entries.append(_row(dup_id, emp, period, wd, d["hours"],
+                                        "duplicate_submission", original_id, d["dup"]))
+                    plant("duplicate_hours", dup_id, "VR-003")
+    return entries, planted
+
+
+def effective_time_entries(time_entries):
+    """(employee_id, work_date) -> the entry whose hours count: the approved
+    correction if there is one, otherwise the approved original. Duplicates,
+    pending and rejected rows never count."""
+    originals, corrections = {}, {}
+    for e in time_entries:
+        key = (e["employee_id"], e["work_date"])
+        if e["entry_type"] == "original":
+            originals[key] = e
+        elif e["entry_type"] == "correction":
+            corrections[key] = e
+    result = {}
+    for key, original in originals.items():
+        corr = corrections.get(key)
+        if corr and corr["approval_status"] == "approved":
+            result[key] = corr
+        elif original["approval_status"] == "approved":
+            result[key] = original
+    return result
+
+===== datagen\__init__.py =====

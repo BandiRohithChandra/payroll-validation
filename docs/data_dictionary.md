@@ -151,6 +151,8 @@ Uniqueness rules beyond the primary key:
 
 Effective allowance: the correction if approved, otherwise the original if approved. Pending and rejected rows never count toward payroll.
 
+For the group heads, who have no manager, approved_by is an hr_partner.
+
 
 ## PayrollInput
 Derived table. One row per employee per pay period, aggregated from the effective approved source records. No value is generated independently, and every amount can be recomputed from the source tables.

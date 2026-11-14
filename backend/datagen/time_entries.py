@@ -130,7 +130,7 @@ def generate_time_entries(rng, employees):
                 if d["outlier"]:
                     plant("daily_hours_outlier", original_id, "VR-005")
                 if d["late"]:
-                    plant("late_submission", original_id, "VR-012")
+                    plant("late_submission", original_id, "VR-010")
                 if d["corr"]:
                     entries.append(_row(
                         IdGenerator.time_entry_id(emp["employee_id"], wd, "C1"),

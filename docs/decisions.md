@@ -29,12 +29,19 @@ Each item fills a gap in the problem statement or fixes a rule. Code, validation
 - All identities, emails (@example.com), bank accounts (12 digits, IFSC-style) and tax IDs (TIN- plus 8 digits) are fictional.
 - About 2% of employees are hired or terminated during the period, so some periods are partial.
 - manager_id forms the approval chain for source records. HR partners (about 1% of staff) approve payroll inputs and exceptions.
+- Managers and HR partners are salaried. HR partners are all in the Corporate pay group. The first manager of each pay group is its head and has no manager; heads take no leave, because it would have no approver. Every other employee has a manager from their own pay group.
+- Missing bank and tax fields are planted with fixed counts (at least 2 each), not by chance, and labelled in the ground truth with the rule expected to catch them (VR-001, VR-002).
 
 ## 6. Source records and approval
 - Time, leave, allowance and deduction rows carry their own approval fields, set when the row is created. Payroll-level decisions (payroll inputs, exceptions, period) live in Approval.
 - About 93% of source rows are approved, 5% pending and 2% rejected. Pending and rejected rows never count toward payroll.
 - Corrections and duplicate submissions are new rows pointing to the original. Effective value = the approved correction if there is one, otherwise the approved original. A duplicate_submission never counts toward hours.
 - Baseline: about 2% of time entries get a correction and about 1% get a duplicate submission.
+- Hours are quarter-hour values. About 4% of working days have no entry (absence). A submission is late when its date is after the period's submission_deadline. Corrections are made only for approved, on-time, non-outlier originals; duplicate submissions copy the original's hours and never count. Rows are conservatively capped so no baseline employee exceeds the pay group maximum; exceeding it happens only through the labelled injection.
+- Leave: only salaried employees who have a manager (group heads take none). At most one unpaid and one paid block per employee per period, placed with at least 2 free working days between blocks so records never overlap and a correction of plus or minus one day never collides. Leave is never submitted late. Effective leave is the approved correction, otherwise the approved original.
+
+- Allowances and deductions have no corrections in the baseline, because their units and amounts are fully derived. Allowances are approved by the employee's manager; the three group heads have no manager, so an HR partner approves theirs. Deductions are approved by an HR partner. Provident fund, professional tax and unpaid-leave deductions are always approved (they are automatic); only loan_recovery follows the 93/5/2 approval split.
+- An allowance or deduction is created on the first or second day after the period ends. An employee is active in a period if hired before it ends and not terminated before it starts.
 
 ## 7. Pay calculation (all derived)
 - Overtime is hours above the pay group's standard_hours_per_day on each day, paid at hourly_rate x overtime_multiplier.
