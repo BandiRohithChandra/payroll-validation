@@ -41,6 +41,8 @@ def run_workflow(rng, ids, employees, time_entries, allowances, deductions,
     emp_by_id = {e["employee_id"]: e for e in employees}
     hr_ids = sorted(e["employee_id"] for e in employees if e["role"] == "hr_partner")
     by_input = {r["payroll_input_id"]: r for r in payroll_inputs}
+    aggregated = {r["payroll_input_id"]: r["aggregated_at"] for r in payroll_inputs}
+    first_aggregated = _at(config.PAY_PERIODS[0].end_date + timedelta(days=8))
 
     # 1. every input starts as draft and is validated
     for r in payroll_inputs:
@@ -57,8 +59,8 @@ def run_workflow(rng, ids, employees, time_entries, allowances, deductions,
     for f in sorted(findings, key=lambda f: (f["rule_id"], f["record_id"])):
         period_id = f["pay_period_id"]
         pin = _pin(f["employee_id"], period_id) if period_id else None
-        day = (period_by_id[period_id].end_date + timedelta(days=9)) if period_id else first_detect
-        detected = _at(day, rng.randrange(180))
+        detected = (aggregated.get(pin, first_aggregated)
+                    + timedelta(hours=2, minutes=rng.randrange(120)))
         exc = {"exception_id": ids.next("exception"), "rule_id": f["rule_id"],
                "severity": f["severity"], "table_name": f["table_name"],
                "record_id": f["record_id"], "employee_id": f["employee_id"],
@@ -101,6 +103,9 @@ def run_workflow(rng, ids, employees, time_entries, allowances, deductions,
             event("payroll_input", pin, "validated", "validated", at, actor, note)
 
     # 4. open blocking exceptions hold an input; the rest go to HR approval
+    def ready(pid, r):
+        floor = r["aggregated_at"] + timedelta(days=1)
+        return max(floor, corrected[pid][1]) if pid in corrected else floor
     blockers = defaultdict(list)  # payroll_input_id, or employee_id for employee-level
     for x in exceptions:
         if x["severity"] == "blocking" and x["status"] == "open":
@@ -114,13 +119,13 @@ def run_workflow(rng, ids, employees, time_entries, allowances, deductions,
         if rules:
             r["status"] = "held"
             event("payroll_input", pid, "validated", "held",
-                  r["aggregated_at"] + timedelta(days=1), SYSTEM, ",".join(sorted(set(rules))))
+                  ready(pid, r) + timedelta(hours=1), SYSTEM, ",".join(sorted(set(rules))))
             continue
         outcome = rng.choices(outcomes, weights)[0]
         if outcome == "pending":
             continue  # still waiting for HR; never exported
         approver = rng.choice(hr_ids)
-        decided = r["aggregated_at"] + timedelta(days=1, minutes=rng.randrange(36 * 60))
+        decided = ready(pid, r) + timedelta(minutes=rng.randrange(60, 36 * 60))
         approvals.append({"approval_id": ids.next("approval"), "entity_type": "payroll_input",
                           "entity_id": pid, "approver_id": approver, "decision": outcome,
                           "decided_at": decided, "comment": ""})

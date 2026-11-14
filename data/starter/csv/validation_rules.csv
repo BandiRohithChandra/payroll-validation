@@ -1,0 +1,11 @@
+rule_id,name,severity,target_table,description,status,effective_from
+VR-001,Missing bank details,blocking,employees,Bank account number or IFSC is empty.,active,2026-01-01
+VR-002,Missing tax id,blocking,employees,Tax id is empty.,active,2026-01-01
+VR-003,Duplicate time submission,warning,time_entries,More than one non-correction entry for the same employee and date; the later one is flagged.,active,2026-01-01
+VR-004,Hours exceed period maximum,blocking,payroll_inputs,Regular plus overtime hours are above the pay group maximum.,active,2026-01-01
+VR-005,Daily hours outlier,warning,time_entries,An original entry has more hours than the daily outlier threshold.,active,2026-01-01
+VR-006,Duplicate allowance,blocking,allowances,More than one approved allowance of the same type for an employee and period.,active,2026-01-01
+VR-007,Unapproved source in payroll input,blocking,payroll_inputs,The input counts source rows that are not approved.,active,2026-01-01
+VR-008,Leave deduction applied twice,blocking,deductions,More than one approved unpaid_leave deduction for the same leave record.,active,2026-01-01
+VR-009,Payroll totals do not reconcile,blocking,payroll_inputs,"Stored totals differ from a recomputation from approved source rows, or net is not gross minus deductions.",active,2026-01-01
+VR-010,Late time submission,warning,time_entries,Entry submitted after the pay period submission deadline.,active,2026-01-01

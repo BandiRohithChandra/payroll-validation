@@ -1,0 +1,140 @@
+{
+  "seed": 20261022,
+  "scale": "starter",
+  "extra_runs": 2,
+  "identical_to_first_run": true,
+  "files": {
+    "csv/pay_groups.csv": {
+      "rows": 3,
+      "sha256": "1791bde3bd9b1f4b80df5a10c18953fc9ce3e495977eca8dc05c60cfc8f7c42b"
+    },
+    "json/pay_groups.json": {
+      "rows": 3,
+      "sha256": "88ee0bd48b9da874dbfbc23a2147210697f21e21303913cf990fe998957ab260"
+    },
+    "csv/pay_periods.csv": {
+      "rows": 3,
+      "sha256": "d8dfc3b41074febfe15edc41a43214733743715efee6cf4d0e3170618ceb8f32"
+    },
+    "json/pay_periods.json": {
+      "rows": 3,
+      "sha256": "68c210b9e18d1259b7c69a06dacfc4f3844db0912b81e67603bcbfb90c5dcf66"
+    },
+    "csv/employees.csv": {
+      "rows": 300,
+      "sha256": "524512286733b388321eff731d68d63928fa1c232c45d449bd1db59769b077ff"
+    },
+    "json/employees.json": {
+      "rows": 300,
+      "sha256": "6b3ac8a50f2d53b3ba6d6ce9676bd3ccbe35d029644da414a93788af56f628c3"
+    },
+    "csv/leave_records.csv": {
+      "rows": 136,
+      "sha256": "16e00804d2ce9328fcff853d0ab4222939697f9f1dd7c3ce12a9e647b3d8de30"
+    },
+    "json/leave_records.json": {
+      "rows": 136,
+      "sha256": "813f531d0760cccb84c3d5c503deb64c138a8163d89bf329f086f519d9445176"
+    },
+    "csv/time_entries.csv": {
+      "rows": 7860,
+      "sha256": "b4857ca8b1a07ac029bec810573022b259920e2c39e7e3241ef9fb7200a2ec19"
+    },
+    "json/time_entries.json": {
+      "rows": 7860,
+      "sha256": "a24e2efb731c37b29f3e7fa6e5f744607eabf3cad9a08fc1fafa0082ac11ce74"
+    },
+    "csv/allowances.csv": {
+      "rows": 1797,
+      "sha256": "8cbb00235250a792bb3fd6ea0208d2b57772e6a70c63954e27f04072b81392bb"
+    },
+    "json/allowances.json": {
+      "rows": 1797,
+      "sha256": "f7e0429cc3ecfd1d1c407baab8a6ea423c65678d4fd9f85d6e635f80d850c5ae"
+    },
+    "csv/deductions.csv": {
+      "rows": 1521,
+      "sha256": "467002869e82ed85e1f59c9514e72255e1c946469b57edd093f8361c515d7e24"
+    },
+    "json/deductions.json": {
+      "rows": 1521,
+      "sha256": "b3ce0a31e9097b845fc5aba4f5f4945b48ce80452467f73b3a16d9fbaf1a80f6"
+    },
+    "csv/payroll_inputs.csv": {
+      "rows": 898,
+      "sha256": "d8ad426a84e3151672bb16babd736bf730dcaac9c703b11ce557443ca6d1788f"
+    },
+    "json/payroll_inputs.json": {
+      "rows": 898,
+      "sha256": "3842c4b2072621f7830243d7362d3b7e354328d18b596d83a9742b977ab9e823"
+    },
+    "csv/validation_rules.csv": {
+      "rows": 10,
+      "sha256": "bf09d6e5372e952bf790ec4290d14766adbdd8dadb16bb954a9e17ab75f99845"
+    },
+    "json/validation_rules.json": {
+      "rows": 10,
+      "sha256": "9ba6f47f9e4182443a58f3b826a2ac64d5604647c135ea02d60c2e864d4c338a"
+    },
+    "csv/exceptions.csv": {
+      "rows": 333,
+      "sha256": "c39e50589a5e04bcb9c1caf2963412e8a7992cbf4976fbd0e89223b5d6e40650"
+    },
+    "json/exceptions.json": {
+      "rows": 333,
+      "sha256": "52495208a5b62e6044db0adda6711c6ddb9413e4e68ebac9696edbdbb042dff2"
+    },
+    "csv/approvals.csv": {
+      "rows": 844,
+      "sha256": "afd342fa7f2383a8864e3d8221c8ca83c97cf2a48635a6f71f051ab1e5ece9d3"
+    },
+    "json/approvals.json": {
+      "rows": 844,
+      "sha256": "e0f399af6fc596e577633e179c7b2227c420730ed892311da684841fccb2a6cf"
+    },
+    "csv/payroll_exports.csv": {
+      "rows": 3,
+      "sha256": "82251c304fd7ae4a2f28972a4f7f3941a149c4eec8744b4b98c66c2c86cffbd5"
+    },
+    "json/payroll_exports.json": {
+      "rows": 3,
+      "sha256": "8e23eaf8be9991f3bb52fc667d76283caf662924ee5b825396525985a4430cf0"
+    },
+    "csv/payroll_export_lines.csv": {
+      "rows": 820,
+      "sha256": "fe904df4bceaaa4074900df6312c9551ba994135f7ad22b93dd6cd98a498cca6"
+    },
+    "json/payroll_export_lines.json": {
+      "rows": 820,
+      "sha256": "b2682637441fac5974237b366021bb26bd979278d2a84d658a156f394d179b56"
+    },
+    "csv/status_events.csv": {
+      "rows": 3986,
+      "sha256": "c3ce9425d03add7c226f31e4af01f555f6f4d8d20c180e0cffacd3f33a6901fe"
+    },
+    "json/status_events.json": {
+      "rows": 3986,
+      "sha256": "10beae785d1338e6ad8a737fbd3b9c531d20d33df3cba93d2e42feeef715361a"
+    },
+    "sql/schema.sql": {
+      "rows": null,
+      "sha256": "35b3b0175f1113d49e651805486a96990079c42f2f5088f6f57ed971d12821b3"
+    },
+    "sql/seed.sql": {
+      "rows": null,
+      "sha256": "a751226d89b811c4abc5ba149bc43e944f0959c5d50b7843e8f2b809fab23e7e"
+    },
+    "ground_truth/ground_truth.csv": {
+      "rows": 333,
+      "sha256": "9c88ad28ac60e1071e0f6acf4d001792abf9ad9fa39943c6e2f03f68c5d01cb6"
+    },
+    "ground_truth/ground_truth.json": {
+      "rows": 333,
+      "sha256": "58542885d609a02e877b8943f23893fc75bb1af0c579def189ed9acabea7fa73"
+    },
+    "outputs/validation_findings.csv": {
+      "rows": 333,
+      "sha256": "abcc54d3e572f1978beeb025e4b8dbfddd9f0c6dfa1ec216938fdadbec54bab1"
+    }
+  }
+}

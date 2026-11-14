@@ -1,0 +1,271 @@
+{
+  "scale": "starter",
+  "seed": 20261022,
+  "row_counts": {
+    "pay_groups": 3,
+    "pay_periods": 3,
+    "employees": 300,
+    "leave_records": 136,
+    "time_entries": 7860,
+    "allowances": 1797,
+    "deductions": 1521,
+    "payroll_inputs": 898,
+    "validation_rules": 10,
+    "exceptions": 333,
+    "approvals": 844,
+    "payroll_exports": 3,
+    "payroll_export_lines": 820,
+    "status_events": 3986
+  },
+  "ground_truth_rows": 333,
+  "checks": [
+    {
+      "check": "primary_keys_unique_and_not_null",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "id_formats",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "foreign_keys_resolve",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "allowed_enum_values",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "date_ordering",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "pending_rows_have_no_approver",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "allowance_deduction_amounts",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "payroll_input_gross_arithmetic",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "exported_input_net_arithmetic",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "one_original_time_entry_per_day",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "every_duplicate_row_is_labelled",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "ground_truth_records_exist",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "lifecycle_transitions_and_event_order",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "exported_only_if_approved_once",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "no_export_with_open_blocking_exception",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "export_lines_match_exported_inputs",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "export_lines_have_bank_and_tax",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "export_totals_and_lines_reconcile",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "exported_inputs_reconcile_to_source",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    }
+  ],
+  "all_checks_passed": true,
+  "rule_evaluation": [
+    {
+      "rule_id": "VR-001",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-002",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-003",
+      "expected": 64,
+      "flagged": 64,
+      "tp": 64,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-004",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-005",
+      "expected": 15,
+      "flagged": 15,
+      "tp": 15,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-006",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-007",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-008",
+      "expected": 3,
+      "flagged": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-009",
+      "expected": 6,
+      "flagged": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    {
+      "rule_id": "VR-010",
+      "expected": 230,
+      "flagged": 230,
+      "tp": 230,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  ],
+  "workflow": {
+    "input_status": {
+      "exported": 820,
+      "rejected": 24,
+      "held": 23,
+      "validated": 31
+    },
+    "exceptions": {
+      "blocking/open": 12,
+      "warning/open": 164,
+      "warning/waived": 145,
+      "blocking/resolved": 12
+    },
+    "exports": [
+      [
+        "PEX-2026-000001",
+        278,
+        "20341996.13"
+      ],
+      [
+        "PEX-2026-000002",
+        273,
+        "19093266.48"
+      ],
+      [
+        "PEX-2026-000003",
+        269,
+        "19591956.61"
+      ]
+    ]
+  }
+}
