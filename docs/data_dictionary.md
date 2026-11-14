@@ -68,3 +68,27 @@ Lifecycle: open -> validating -> approved -> exported. A period can only be expo
 Notes:
 - Periods must not overlap and must follow each other without gaps.
 - Overtime and hour limits are per pay group (max_hours_per_period on PayGroup), not per period.
+
+
+## TimeEntry
+Transaction table. One row per hours submission by an hourly employee. Rows are never edited: a correction or a duplicate submission is a new row that points to the original. History is preserved in full.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| time_entry_id | string | yes | TIME-EMP-000001-2026-01-05, with -C1 (correction) or -D1 (duplicate) suffix | PK | matches ^TIME-EMP-\d{6}-\d{4}-\d{2}-\d{2}(-[CD]\d)?$; the prefix must equal the employee_id and work_date; immutable |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; the employee's pay_type must be hourly |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod; work_date must fall inside the period |
+| work_date | date | yes | YYYY-MM-DD | no | on or after hire_date and not after termination_date |
+| hours_worked | decimal(4,2) | yes | hours | no | greater than 0 and at most 24 |
+| entry_type | enum | yes | original, correction, duplicate_submission | no | one of the allowed values |
+| related_entry_id | string | optional | existing TIME- id | no | FK to TimeEntry (self); required for correction and duplicate_submission and null for original; must point to an original entry of the same employee and work_date |
+| submitted_at | timestamp | yes | UTC | no | on or after work_date; a submission after the period's submission_deadline is late |
+| approval_status | enum | yes | approved, pending, rejected | no | one of the allowed values; set when the row is created |
+| approved_by | string | optional | existing EMP- id | no | FK to Employee; required when approved or rejected; must be the employee's manager_id |
+| approved_at | timestamp | optional | UTC | no | required when approved_by is set; on or after submitted_at |
+
+Uniqueness rules beyond the primary key:
+- At most one original entry per (employee_id, work_date).
+- At most one correction per original entry.
+
+Effective hours for an employee on a day: the correction if it is approved, otherwise the original if it is approved. A duplicate_submission never counts toward hours. Duplicates are expected in the baseline data and are caught by the duplicate-hours validation rule. Overtime is calculated during aggregation, never stored here.
