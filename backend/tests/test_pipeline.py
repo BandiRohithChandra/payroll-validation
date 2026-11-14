@@ -4,6 +4,8 @@ import pytest
 from datagen.evaluate import evaluate
 from datagen.pipeline import build_dataset
 from datagen.validate_dataset import run_checks
+from datagen.rules import run_validation
+from decimal import Decimal
 from datagen.writer import write_all
 
 
@@ -63,3 +65,48 @@ def test_sql_seed_loads_with_foreign_keys_enforced(data, tmp_path):
     conn.executescript((tmp_path / "sql" / "seed.sql").read_text(encoding="utf-8"))
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == len(data["employees"])
+
+
+def test_vr011_detects_negative_net_pay(data):
+    inputs = [r.copy() for r in data["payroll_inputs"]]
+    inputs[0]["net_pay"] = Decimal("-1.00")
+
+    findings = run_validation(
+        data["employees"], data["time_entries"],
+        data["allowances"], data["deductions"], inputs
+    )
+
+    assert any(
+        f["rule_id"] == "VR-011"
+        and f["record_id"] == inputs[0]["payroll_input_id"]
+        for f in findings
+    )
+
+
+def test_vr012_detects_ineligible_allowance(data):
+    hourly_input = next(
+        r for r in data["payroll_inputs"] if r["pay_type"] == "hourly"
+    )
+
+    invalid = data["allowances"][0].copy()
+    invalid.update({
+        "allowance_id": "AL-TEST-000001",
+        "employee_id": hourly_input["employee_id"],
+        "pay_period_id": hourly_input["pay_period_id"],
+        "allowance_type": "remote_work",
+        "approval_status": "pending",
+        "approved_by": None,
+        "approved_at": None,
+    })
+
+    findings = run_validation(
+        data["employees"], data["time_entries"],
+        data["allowances"] + [invalid],
+        data["deductions"], data["payroll_inputs"]
+    )
+
+    assert any(
+        f["rule_id"] == "VR-012"
+        and f["record_id"] == invalid["allowance_id"]
+        for f in findings
+    )

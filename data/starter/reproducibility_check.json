@@ -54,27 +54,27 @@
     },
     "csv/deductions.csv": {
       "rows": 1521,
-      "sha256": "467002869e82ed85e1f59c9514e72255e1c946469b57edd093f8361c515d7e24"
+      "sha256": "0c3df4f9b9b656dae9e9d8b23a2b049f3fe085f37e138bd605d852d4ede6a633"
     },
     "json/deductions.json": {
       "rows": 1521,
-      "sha256": "b3ce0a31e9097b845fc5aba4f5f4945b48ce80452467f73b3a16d9fbaf1a80f6"
+      "sha256": "797fbfc36de75168d729e1cc3d184403c040739937c3fadec7f6d4911785f342"
     },
     "csv/payroll_inputs.csv": {
       "rows": 898,
-      "sha256": "d8ad426a84e3151672bb16babd736bf730dcaac9c703b11ce557443ca6d1788f"
+      "sha256": "fc8c6a6f6bf3ffd8bd2997113501c1202e6774bd6be7440c0d3bf4ef50b2b032"
     },
     "json/payroll_inputs.json": {
       "rows": 898,
-      "sha256": "3842c4b2072621f7830243d7362d3b7e354328d18b596d83a9742b977ab9e823"
+      "sha256": "09570ee9b6e2c6566526ace8260cf7bd5d43c9028e2de5ac83f762ef1329676b"
     },
     "csv/validation_rules.csv": {
-      "rows": 10,
-      "sha256": "bf09d6e5372e952bf790ec4290d14766adbdd8dadb16bb954a9e17ab75f99845"
+      "rows": 12,
+      "sha256": "fda0cdaffd38aefa5726b471588a1b006c5f4d0a61dc0104faab451a6dbd929f"
     },
     "json/validation_rules.json": {
-      "rows": 10,
-      "sha256": "9ba6f47f9e4182443a58f3b826a2ac64d5604647c135ea02d60c2e864d4c338a"
+      "rows": 12,
+      "sha256": "45a77403b49b852defd6029a7380d0e6bc079b4105fd8f20d960b89318474577"
     },
     "csv/exceptions.csv": {
       "rows": 333,
@@ -94,19 +94,19 @@
     },
     "csv/payroll_exports.csv": {
       "rows": 3,
-      "sha256": "82251c304fd7ae4a2f28972a4f7f3941a149c4eec8744b4b98c66c2c86cffbd5"
+      "sha256": "521551751969c75e13a30dd7b3736ad7de15d4b5484ce992023b1943cd1bc88b"
     },
     "json/payroll_exports.json": {
       "rows": 3,
-      "sha256": "8e23eaf8be9991f3bb52fc667d76283caf662924ee5b825396525985a4430cf0"
+      "sha256": "d60e6334b45e58979f3e3731fbc0285a11a060aec39d5ec5d14439acfc501524"
     },
     "csv/payroll_export_lines.csv": {
       "rows": 820,
-      "sha256": "fe904df4bceaaa4074900df6312c9551ba994135f7ad22b93dd6cd98a498cca6"
+      "sha256": "bb9b36d4eb92d0b9df81ee97a83d0470edf8e71e078f8802dc0953e9a268e1a6"
     },
     "json/payroll_export_lines.json": {
       "rows": 820,
-      "sha256": "b2682637441fac5974237b366021bb26bd979278d2a84d658a156f394d179b56"
+      "sha256": "fa11684df70334055238a47547bb27f20dd527f10c75ecac5e2d4deeed6e802f"
     },
     "csv/status_events.csv": {
       "rows": 3986,
@@ -122,7 +122,7 @@
     },
     "sql/seed.sql": {
       "rows": null,
-      "sha256": "a751226d89b811c4abc5ba149bc43e944f0959c5d50b7843e8f2b809fab23e7e"
+      "sha256": "bfc0ebf53f2b431868028789f85572b20b7950cdb61869283afb56b295e47b18"
     },
     "ground_truth/ground_truth.csv": {
       "rows": 333,

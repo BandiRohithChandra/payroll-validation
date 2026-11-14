@@ -5,7 +5,7 @@ from decimal import Decimal
 import config
 from datagen.ids import is_valid
 from datagen.payroll import aggregate_payroll_inputs
-from datagen.rules import RECON_FIELDS
+from datagen.rules import RECON_FIELDS, allowance_is_eligible
 from datagen.schema import ENUMS, FKS, ID_KIND, PK, TABLE_OF_KEY
 
 ZERO = Decimal("0.00")
@@ -62,6 +62,7 @@ def run_checks(data):
 
     # dates and approval fields
     periods = {p["pay_period_id"]: p for p in t["pay_periods"]}
+    employees_by_id = {e["employee_id"]: e for e in t["employees"]}
     bad = []
     for tb, a, b in DATE_PAIRS:
         bad += [(tb, r[PK[tb]], a, b) for r in t[tb]
@@ -82,6 +83,14 @@ def run_checks(data):
     record("allowance_deduction_amounts",
            [(tb, r[PK[tb]]) for tb in ("allowances", "deductions") for r in t[tb]
             if r["amount"] != r["units"] * r["unit_amount"]])
+
+    record("allowances_match_employee_eligibility",
+           [a["allowance_id"] for a in t["allowances"]
+            if not allowance_is_eligible(a, employees_by_id, periods)])
+
+    record("payroll_inputs_meet_minimum_net_pay",
+           [r["payroll_input_id"] for r in t["payroll_inputs"]
+            if r["net_pay"] < config.MIN_NET_PAY])
     inputs = {r["payroll_input_id"]: r for r in t["payroll_inputs"]}
     record("payroll_input_gross_arithmetic",
            [pid for pid, r in inputs.items()

@@ -101,8 +101,26 @@ def generate_deductions(rng, ids, employees, leaves):
             eid = emp["employee_id"]
             items = []  # (type, leave_id, units, unit_amount, always_approved)
             if emp["pay_type"] == "salaried":
-                items.append(("provident_fund", None, D("1.00"),
-                              _money(emp["monthly_salary"] * config.PROVIDENT_FUND_RATE), True))
+                working_days = [
+                    period.start_date + timedelta(days=i)
+                    for i in range((period.end_date - period.start_date).days + 1)
+                    if (period.start_date + timedelta(days=i)).weekday() < 5
+                ]
+
+                last = emp["termination_date"] or period.end_date
+                active_days = sum(
+                    1 for day in working_days
+                    if emp["hire_date"] <= day <= last
+                )
+
+                prorated_salary = (
+                    emp["monthly_salary"] * active_days / period.working_days
+                )
+
+                items.append((
+                    "provident_fund", None, D("1.00"),
+                    _money(prorated_salary * config.PROVIDENT_FUND_RATE), True
+                ))
             items.append(("professional_tax", None, D("1.00"), config.PROFESSIONAL_TAX, True))
             if eid in loans:
                 items.append(("loan_recovery", None, D("1.00"), D(loans[eid]).quantize(CENT), False))

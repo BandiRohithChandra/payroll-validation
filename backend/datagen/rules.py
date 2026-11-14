@@ -1,6 +1,6 @@
 """ValidationRule table and the validation engine."""
 from collections import defaultdict
-
+from datagen.pay_items import _active
 import config
 from datagen.payroll import aggregate_payroll_inputs
 
@@ -31,10 +31,50 @@ RULES = [
           "Stored totals differ from a recomputation from approved source rows, or net is not gross minus deductions."),
     _rule("VR-010", "Late time submission", "warning", "time_entries",
           "Entry submitted after the pay period submission deadline."),
+    _rule("VR-011", "Negative net pay", "blocking", "payroll_inputs",
+          "Net pay is below the configured minimum."),
+    _rule("VR-012", "Ineligible allowance", "blocking", "allowances",
+          "Allowance type is not eligible for the employee or pay group."),
 ]
 SEVERITY = {r["rule_id"]: r["severity"] for r in RULES}
 RECON_FIELDS = ("regular_hours", "overtime_hours", "base_pay", "overtime_pay",
                 "allowance_total", "deduction_total", "gross_pay", "net_pay")
+
+def allowance_is_eligible(a, employee_by_id, period_by_id):
+    emp = employee_by_id[a["employee_id"]]
+    period = period_by_id[a["pay_period_id"]]
+
+    if isinstance(period, dict):
+        start_date = period["start_date"]
+        end_date = period["end_date"]
+    else:
+        start_date = period.start_date
+        end_date = period.end_date
+
+    active = (
+        emp["hire_date"] <= end_date
+        and (
+            emp["termination_date"] is None
+            or emp["termination_date"] >= start_date
+        )
+    )
+
+    if not active:
+        return False
+
+    kind = a["allowance_type"]
+
+    if kind == "transport":
+        return True
+    if kind == "meal":
+        return emp["pay_type"] == "hourly"
+    if kind == "remote_work":
+        return emp["pay_type"] == "salaried" and emp["pay_group_id"] == "PG-001"
+    if kind == "shift":
+        return emp["pay_type"] == "hourly" and emp["pay_group_id"] == "PG-002"
+
+    return False
+
 
 
 def run_validation(employees, time_entries, allowances, deductions, payroll_inputs):
@@ -72,6 +112,14 @@ def run_validation(employees, time_entries, allowances, deductions, payroll_inpu
                 flag("VR-003", "time_entries", r["time_entry_id"], r["employee_id"],
                      r["pay_period_id"], f"same day as {rows[0]['time_entry_id']}")
 
+        employee_by_id = {e["employee_id"]: e for e in employees}
+
+    for a in allowances:
+        if not allowance_is_eligible(a, employee_by_id, period_by_id):
+            flag("VR-012", "allowances", a["allowance_id"],
+                 a["employee_id"], a["pay_period_id"],
+                 f"{a['allowance_type']} is not eligible for this employee")
+
     allowance_groups = defaultdict(list)
     for a in allowances:
         if a["approval_status"] == "approved":
@@ -103,6 +151,10 @@ def run_validation(employees, time_entries, allowances, deductions, payroll_inpu
         if r["unapproved_source_count"] > 0:
             flag("VR-007", "payroll_inputs", pid, eid, per,
                  f"{r['unapproved_source_count']} unapproved source rows counted")
+        if r["net_pay"] < config.MIN_NET_PAY:
+            flag("VR-011", "payroll_inputs", pid, eid, per,
+                 f"Net pay {r['net_pay']} is below minimum {config.MIN_NET_PAY}")
+
         exp = expected.get(pid)
         bad = exp is None or any(abs(r[k] - exp[k]) > tol for k in RECON_FIELDS)
         bad = bad or abs(r["gross_pay"] - r["deduction_total"] - r["net_pay"]) > tol

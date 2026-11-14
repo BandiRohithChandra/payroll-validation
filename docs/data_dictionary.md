@@ -230,7 +230,7 @@ Reconciliation rules (checked by VR-009 and validate_dataset.py):
 
 
 ## ValidationRule
-Master table. The catalogue of validation checks run before payroll export. 10 rows. Rows are never edited: a change to a rule would be a new row with a later effective_from.
+Master table. The catalogue of validation checks run before payroll export. 12 rows. Rows are never edited: a change to a rule would be a new row with a later effective_from.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
@@ -260,6 +260,8 @@ Catalogue:
 | VR-008 | Leave deduction applied twice | blocking | deductions | more than one approved unpaid_leave deduction for the same leave_id; the later one is flagged |
 | VR-009 | Payroll totals do not reconcile | blocking | payroll_inputs | stored amounts differ from a recomputation by more than INR 0.01, or net_pay is not gross_pay - deduction_total |
 | VR-010 | Late time submission | warning | time_entries | an original entry was submitted after the period's submission_deadline |
+| VR-011 | Negative net pay | blocking | payroll_inputs | net_pay is below the configured minimum of INR 0.00 |
+| VR-012 | Ineligible allowance | blocking | allowances | allowance type is not eligible for the employee's pay type, pay group or active employment period |
 
 Notes:
 - The five required edge cases are detected by VR-004 (hours exceed period maximum), VR-006 (same allowance duplicated), VR-007 (unapproved time exported), VR-008 (leave deduction twice) and VR-009 (totals fail to reconcile).

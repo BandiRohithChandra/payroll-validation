@@ -2,10 +2,10 @@
 
 Each item fills a gap in the problem statement or fixes a rule. Code, validation and metrics must follow this file. The problem statement is paraphrased here, not copied.
 
-## 1. Architecture (three tiers)
+**## 1. Architecture (backend-only)**
 - Database: SQLite (data/payroll.db) holds all entities. CSV, JSON and SQL exports are written beside it.
-- Backend: Python (standard library generators and rules) plus a FastAPI app that exposes the data, validation, approvals and export gate. CLI commands: generate, validate, reproduce.
-- Frontend: React with Vite. Four screens: Dashboard, Exceptions, Approvals, Exports. It only reads and acts through the API.
+- Backend: Python generators, validation rules, payroll calculations and workflow logic. The CLI supports dataset generation, validation and reproducibility verification. FastAPI provides the API layer where applicable.
+- No frontend is required. The solution is focused on backend data generation, payroll validation, approvals, reconciliation and controlled exports.
 - Generic scaffolding (ID counters, exporter and manifest, validator framework) is reused from my own earlier project, cart-recovery-datagen. All payroll domain logic is new.
 
 ## 2. Reproducibility
@@ -41,20 +41,20 @@ Each item fills a gap in the problem statement or fixes a rule. Code, validation
 - Leave: only salaried employees who have a manager (group heads take none). At most one unpaid and one paid block per employee per period, placed with at least 2 free working days between blocks so records never overlap and a correction of plus or minus one day never collides. Leave is never submitted late. Effective leave is the approved correction, otherwise the approved original.
 
 - Allowances and deductions have no corrections in the baseline, because their units and amounts are fully derived. Allowances are approved by the employee's manager; the three group heads have no manager, so an HR partner approves theirs. Deductions are approved by an HR partner. Provident fund, professional tax and unpaid-leave deductions are always approved (they are automatic); only loan_recovery follows the 93/5/2 approval split.
-- An allowance or deduction is created on the first or second day after the period ends. An employee is active in a period if hired before it ends and not terminated before it starts.
+- An allowance or deduction is created on the first or second day after the period ends. An employee is active in a period if their hire date is on or before the period end date and their termination date is either empty or on or after the period start date.
 
 ## 7. Pay calculation (all derived)
 - Overtime is hours above the pay group's standard_hours_per_day on each day, paid at hourly_rate x overtime_multiplier.
-- Hourly base_pay = regular_hours x hourly_rate. Salaried base_pay = monthly_salary.
+- Hourly base_pay = regular_hours x hourly_rate. Salaried base_pay = monthly_salary prorated by active working days in the pay period.
 - Unpaid leave (salaried only) reduces pay only through its Deduction row: units = leave days, unit_amount = monthly_salary / working_days.
 - Allowance rules: transport (all active, INR 2,000 per period), meal (hourly, INR 100 per day worked), remote_work (salaried in Corporate, INR 1,500 per period), shift (hourly in Operations, INR 250 per day worked).
-- Deduction rules: provident_fund (salaried, 12% of monthly_salary), professional_tax (all active, INR 200), loan_recovery (about 8% of employees, a fixed installment), unpaid_leave (one per effective unpaid leave record).
+- Deduction rules: provident_fund (salaried, 12% of prorated monthly salary), professional_tax (all active, INR 200), loan_recovery (about 8% of employees, a fixed installment), unpaid_leave (one per effective unpaid leave record).
 - gross_pay = base_pay + overtime_pay + allowances_total. net_pay = gross_pay - deductions_total and must not be negative.
 
 ## 8. Validation rules (stored in ValidationRule)
 - 12 rules, VR-001 to VR-012 (see the data dictionary for the catalogue). Blocking rules keep the payroll input in flagged status. Warning rules are recorded and reviewed.
 - Thresholds: daily hours outlier 14 hours, reconciliation tolerance 0.01 INR, net pay below 0.
-- Rules run after aggregation and again at export (VR-009 and VR-010 as a second gate).
+- Validation rules run after payroll aggregation. The export workflow separately checks approval status and open blocking exceptions before allowing payroll inputs to be exported. Reconciliation checks verify payroll totals and exported amounts.
 
 ## 9. Exceptions, approvals and export
 - Each finding becomes one Exception row. About 85% of blocking exceptions get resolved through a correction or rejection, and their payroll inputs are recalculated. The rest stay open, so their inputs are held back from export.
@@ -71,9 +71,9 @@ Each item fills a gap in the problem statement or fixes a rule. Code, validation
 2. duplicate_allowance: a second original allowance of the same type for one employee and period.
 3. unapproved_time_exported: an export line whose payroll input used an unapproved time entry.
 4. leave_deduction_twice: a second unpaid_leave deduction for the same leave record.
-5. totals_not_reconciled: an export batch (or payroll input) whose total differs from the sum of its parts.
+5\. totals_fail_to_reconcile: a payroll input whose stored totals differ from the recomputed totals.
 - Counts: 3 per type in the starter set and 40 per type in the full set. Each injection touches only its target rows and is recorded in ground_truth with the rule expected to catch it.
-- ground_truth is a separate output and is never read by any generator, rule or feature step. validate.py runs every check first and compares with the labels afterwards.
+- ground_truth is a separate output and is never read by any generator, rule or feature step. validate_dataset.py runs dataset integrity checks, while evaluate.py compares validation findings with ground-truth labels afterwards.
 
 ## 12. ID conventions
 - Given: EMP-000001, PP-2026-01, TIME-<employee-id>-<date>, PIN-<employee-id>-2026-01, PEX-2026-000001.

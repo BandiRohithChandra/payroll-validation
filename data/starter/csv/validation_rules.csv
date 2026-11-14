@@ -9,3 +9,5 @@ VR-007,Unapproved source in payroll input,blocking,payroll_inputs,The input coun
 VR-008,Leave deduction applied twice,blocking,deductions,More than one approved unpaid_leave deduction for the same leave record.,active,2026-01-01
 VR-009,Payroll totals do not reconcile,blocking,payroll_inputs,"Stored totals differ from a recomputation from approved source rows, or net is not gross minus deductions.",active,2026-01-01
 VR-010,Late time submission,warning,time_entries,Entry submitted after the pay period submission deadline.,active,2026-01-01
+VR-011,Negative net pay,blocking,payroll_inputs,Net pay is below the configured minimum.,active,2026-01-01
+VR-012,Ineligible allowance,blocking,allowances,Allowance type is not eligible for the employee or pay group.,active,2026-01-01

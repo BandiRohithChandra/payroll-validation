@@ -10,7 +10,7 @@
     "allowances": 17486,
     "deductions": 15885,
     "payroll_inputs": 8974,
-    "validation_rules": 10,
+    "validation_rules": 12,
     "exceptions": 2892,
     "approvals": 8476,
     "payroll_exports": 3,
@@ -57,6 +57,18 @@
     },
     {
       "check": "allowance_deduction_amounts",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "allowances_match_employee_eligibility",
+      "passed": true,
+      "failures": 0,
+      "examples": []
+    },
+    {
+      "check": "payroll_inputs_meet_minimum_net_pay",
       "passed": true,
       "failures": 0,
       "examples": []
@@ -254,17 +266,17 @@
       [
         "PEX-2026-000001",
         2782,
-        "210226840.64"
+        "210298049.71"
       ],
       [
         "PEX-2026-000002",
         2767,
-        "202950242.81"
+        "202993457.81"
       ],
       [
         "PEX-2026-000003",
         2754,
-        "208150171.19"
+        "208200522.09"
       ]
     ]
   }
