@@ -255,3 +255,25 @@ Uniqueness rules beyond the primary key:
 Effect on payroll:
 - A PayrollInput with at least one open blocking Exception has status flagged and cannot be approved or exported.
 - When the last open blocking Exception is resolved, the PayrollInput returns to calculated and is recomputed.
+
+
+## Approval
+Event table, append-only. One row per payroll-level decision. Source-record approvals (time, leave, allowance, deduction) are stored on those rows and are not repeated here. Rows are never edited or deleted.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| approval_id | string | yes | APR-000001 | PK | matches ^APR-\d{6}$, immutable |
+| approval_type | enum | yes | period_validation_started, payroll_input_approved, exception_resolved, exception_waived, period_approved | no | one of the allowed values |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
+| payroll_input_id | string | optional | existing PIN- id | no | FK to PayrollInput; required for payroll_input_approved, null otherwise |
+| exception_id | string | optional | existing EXC- id | no | FK to Exception; required for exception_resolved and exception_waived, null otherwise |
+| decided_by | string | yes | existing EMP- id | no | FK to Employee; must have the hr_partner role |
+| decided_at | timestamp | yes | UTC | no | on or after the pay period's end_date; later than the exception's detected_at when exception_id is set |
+| comment | string | optional | free text | no | required for exception_waived (the reason) |
+
+Rules:
+- payroll_input_approved: the input must have status calculated, no open blocking exceptions, and every source record it used must be approved. decided_by must not be the input's own employee_id.
+- exception_waived: allowed only when the exception's rule severity is warning. A blocking exception can never be waived.
+- period_approved: allowed only when every PayrollInput of the period is approved or exported.
+- period_validation_started and period_approved move PayPeriod.status from open to validating and from validating to approved.
+- Every change of status on PayPeriod, PayrollInput and Exception has exactly one Approval row (or a PayrollExport row for exported), so history is never overwritten.
