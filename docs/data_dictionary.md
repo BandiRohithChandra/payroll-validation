@@ -224,95 +224,92 @@ Reconciliation rules (checked by VR-009 and validate_dataset.py):
 
 
 ## ValidationRule
-Master table. The catalogue of validation checks run before payroll export. One row per rule version. Rows are never edited: a change to a rule or its threshold is a new row with a later effective_from, and the old row is set to retired by that new row's existence (the status of the old row is not rewritten; the current rule is the one with the latest effective_from per rule_code).
+Master table. The catalogue of validation checks run before payroll export. 10 rows. Rows are never edited: a change to a rule would be a new row with a later effective_from.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
 | rule_id | string | yes | VR-001 | PK | matches ^VR-\d{3}$, immutable |
-| rule_code | string | yes | UPPER_SNAKE_CASE, e.g. HOURS_EXCEED_PERIOD_MAX | no | unique together with effective_from |
 | name | string | yes | short title | no | non-empty |
-| description | string | yes | what the rule checks, in one sentence | no | non-empty |
-| applies_to | enum | yes | employee, time_entry, leave_record, allowance, deduction, payroll_input, payroll_export | no | one of the allowed values |
 | severity | enum | yes | blocking, warning | no | one of the allowed values |
-| threshold_value | decimal(10,2) | optional | number | no | required for rules that have a limit (see catalogue), null otherwise |
-| threshold_unit | string | optional | e.g. hours, INR | no | required when threshold_value is set |
+| target_table | enum | yes | employees, time_entries, allowances, deductions, payroll_inputs | no | the table whose rows the rule flags |
+| description | string | yes | what the rule checks | no | non-empty |
+| status | enum | yes | active | no | one of the allowed values |
 | effective_from | date | yes | YYYY-MM-DD | no | on or before the first pay period start |
 
 Severity effect:
-- blocking: the Exception keeps the PayrollInput in flagged status, so it cannot be approved or exported until the exception is resolved.
-- warning: the Exception is recorded and reviewed, but does not stop approval or export.
+- blocking: while the exception is open, the payroll input is held and cannot be approved or exported.
+- warning: the exception is recorded but does not stop approval or export.
 
-Initial catalogue (all effective from the first pay period start):
+Catalogue:
 
-| rule_id | rule_code | applies_to | severity | Threshold | What it checks |
-|---|---|---|---|---|---|
-| VR-001 | MISSING_BANK_DETAILS | employee | blocking | none | bank_account_number or bank_ifsc is missing |
-| VR-002 | MISSING_TAX_ID | employee | blocking | none | tax_id is missing |
-| VR-003 | DUPLICATE_HOURS | time_entry | blocking | none | a duplicate_submission exists for an employee and day that already has an original or correction |
-| VR-004 | HOURS_EXCEED_PERIOD_MAX | payroll_input | blocking | pay group's max_hours_per_period | total_hours is above the pay group maximum |
-| VR-005 | DAILY_HOURS_OUTLIER | time_entry | warning | 14 hours | one day's hours are above the threshold |
-| VR-006 | DUPLICATE_ALLOWANCE | allowance | blocking | none | more than one original allowance of the same type for an employee and period |
-| VR-007 | INELIGIBLE_ALLOWANCE | allowance | blocking | none | the employee does not meet the eligibility rule for the allowance type |
-| VR-008 | LEAVE_DEDUCTION_DUPLICATED | deduction | blocking | none | more than one unpaid_leave deduction for the same leave_id |
-| VR-009 | UNAPPROVED_SOURCE_USED | payroll_input | blocking | none | a payroll input or export includes a source record that is not approved |
-| VR-010 | TOTALS_DO_NOT_RECONCILE | payroll_input | blocking | 0.01 INR | a payroll input amount differs from the recomputed sum of its source records by more than the threshold |
-| VR-011 | NEGATIVE_NET_PAY | payroll_input | blocking | 0 INR | net_pay is below zero |
-| VR-012 | LATE_SUBMISSION | time_entry | warning | none | a time entry or leave record was submitted after the period's submission_deadline |
+| rule_id | name | severity | target_table | What it checks |
+|---|---|---|---|---|
+| VR-001 | Missing bank details | blocking | employees | bank_account_number or bank_ifsc is empty |
+| VR-002 | Missing tax id | blocking | employees | tax_id is empty |
+| VR-003 | Duplicate time submission | warning | time_entries | more than one non-correction entry for the same employee and day; the later one is flagged |
+| VR-004 | Hours exceed period maximum | blocking | payroll_inputs | regular + overtime hours above the pay group's max_hours_per_period |
+| VR-005 | Daily hours outlier | warning | time_entries | an original entry has more than 14 hours in one day |
+| VR-006 | Duplicate allowance | blocking | allowances | more than one approved allowance of the same type for an employee and period; the later one is flagged |
+| VR-007 | Unapproved source in payroll input | blocking | payroll_inputs | unapproved_source_count is above 0 |
+| VR-008 | Leave deduction applied twice | blocking | deductions | more than one approved unpaid_leave deduction for the same leave_id; the later one is flagged |
+| VR-009 | Payroll totals do not reconcile | blocking | payroll_inputs | stored amounts differ from a recomputation by more than INR 0.01, or net_pay is not gross_pay - deduction_total |
+| VR-010 | Late time submission | warning | time_entries | an original entry was submitted after the period's submission_deadline |
 
 Notes:
-- The five required edge cases are detected by VR-004, VR-006, VR-009, VR-008 and VR-010.
-- VR-009 and VR-010 are re-run at export time as a second gate, so an export can never contain an unapproved source or a total that does not reconcile.
+- The five required edge cases are detected by VR-004 (hours exceed period maximum), VR-006 (same allowance duplicated), VR-007 (unapproved time exported), VR-008 (leave deduction twice) and VR-009 (totals fail to reconcile).
+- The tolerance (0.01), the outlier threshold (14 hours) and the submission grace period (5 days) are in config.py, not stored per rule.
 
 
 ## Exception
-Event table. One row per finding raised by a validation rule on a source record. The row holds the current status only; each change of status is recorded as an Approval row, so history is never overwritten.
+Event table. One row per finding raised by a validation rule. The row holds the current status; every status change is also a row in `status_events`, so history is not lost.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
 | exception_id | string | yes | EXC-000001 | PK | matches ^EXC-\d{6}$, immutable |
-| rule_id | string | yes | existing VR- id | no | FK to ValidationRule; the rule version in force at detected_at |
+| rule_id | string | yes | existing VR- id | no | FK to ValidationRule |
+| severity | enum | yes | blocking, warning | no | copied from the rule |
+| table_name | enum | yes | employees, time_entries, allowances, deductions, payroll_inputs | no | equals the rule's target_table |
+| record_id | string | yes | id of the flagged record | no | exists in table_name |
 | employee_id | string | yes | existing EMP- id | no | FK to Employee |
-| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
-| payroll_input_id | string | optional | existing PIN- id | no | FK to PayrollInput; required when the exception blocks a payroll input, null for employee-level findings that exist before any input is built |
-| source_table | enum | yes | employees, time_entries, leave_records, allowances, deductions, payroll_inputs, payroll_exports | no | one of the allowed values; must match the rule's applies_to |
-| source_record_id | string | yes | id of the flagged record | no | must exist in source_table; checked by validate.py |
-| detected_at | timestamp | yes | UTC | no | on or after the pay period's end_date |
+| pay_period_id | string | optional | existing PP- id | no | FK to PayPeriod; null for employee-level findings (VR-001, VR-002) |
+| payroll_input_id | string | optional | existing PIN- id | no | FK to PayrollInput; null for employee-level findings, which block every input of that employee |
 | detail | string | yes | one sentence with the values that triggered the rule | no | non-empty |
-| status | enum | yes | open, resolved, waived | no | one of the allowed values; see lifecycle |
+| status | enum | yes | open, resolved, waived | no | one of the allowed values |
+| resolution | enum | optional | corrected, waived | no | null while open; corrected when status is resolved, waived when status is waived |
+| detected_at | timestamp | yes | UTC | no | after the payroll input's aggregated_at |
+| resolved_at | timestamp | optional | UTC | no | required when status is not open; on or after detected_at |
+| resolved_by | string | optional | existing EMP- id | no | FK to Employee; an hr_partner; required when status is not open |
 
-Lifecycle: open -> resolved, or open -> waived. Each move creates an Approval row of type exception_resolved or exception_waived, so the status is the current state and the history is in Approval.
-- resolved: the underlying data was fixed (a correction or rejection was recorded) and the rule passes on re-run.
-- waived: allowed only when the rule's severity is warning, and only by an hr_partner.
-- A blocking exception can never be waived.
-
-Uniqueness rules beyond the primary key:
-- At most one open Exception per (rule_id, source_record_id). A re-run of the rules must not create a second open copy of the same finding.
+Lifecycle: open -> resolved, or open -> waived.
+- resolved (resolution corrected): only for blocking rules VR-006, VR-007, VR-008 and VR-009. The payroll input is recomputed without the duplicate row (VR-006, VR-008) or from approved rows only (VR-007, VR-009). The before and after net pay are stored in a `validated -> validated` event in `status_events`.
+- waived: only for warning rules. A blocking exception is never waived.
+- open: VR-001, VR-002 and VR-004 need new source data, so they stay open and the input stays held. Warnings that are not waived also stay open and do not block anything.
 
 Effect on payroll:
-- A PayrollInput with at least one open blocking Exception has status flagged and cannot be approved or exported.
-- When the last open blocking Exception is resolved, the PayrollInput returns to calculated and is recomputed.
+- A payroll input with an open blocking exception (its own, or an employee-level one) has status held and is not exported.
+- One decision is made per payroll input, so all its correctable defects are cleared together.
 
 
 ## Approval
-Event table, append-only. One row per payroll-level decision. Source-record approvals (time, leave, allowance, deduction) are stored on those rows and are not repeated here. Rows are never edited or deleted.
+Event table, append-only. One row per HR decision on a payroll input. Approvals of source records (time, leave, allowance, deduction) are stored on those rows. Exception resolutions are stored on the exception and in `status_events`, not here. Rows are never edited or deleted.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
 | approval_id | string | yes | APR-000001 | PK | matches ^APR-\d{6}$, immutable |
-| approval_type | enum | yes | period_validation_started, payroll_input_approved, exception_resolved, exception_waived, period_approved | no | one of the allowed values |
-| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
-| payroll_input_id | string | optional | existing PIN- id | no | FK to PayrollInput; required for payroll_input_approved, null otherwise |
-| exception_id | string | optional | existing EXC- id | no | FK to Exception; required for exception_resolved and exception_waived, null otherwise |
-| decided_by | string | yes | existing EMP- id | no | FK to Employee; must have the hr_partner role |
-| decided_at | timestamp | yes | UTC | no | on or after the pay period's end_date; later than the exception's detected_at when exception_id is set |
-| comment | string | optional | free text | no | required for exception_waived (the reason) |
+| entity_type | enum | yes | payroll_input | no | one of the allowed values |
+| entity_id | string | yes | existing PIN- id | no | FK to PayrollInput (entity_type says which table) |
+| approver_id | string | yes | existing EMP- id | no | FK to Employee; an hr_partner |
+| decision | enum | yes | approved, rejected | no | one of the allowed values |
+| decided_at | timestamp | yes | UTC | no | after the input's aggregated_at |
+| comment | string | optional | free text | no | empty in generated data |
 
 Rules:
-- payroll_input_approved: the input must have status calculated, no open blocking exceptions, and every source record it used must be approved. decided_by must not be the input's own employee_id.
-- exception_waived: allowed only when the exception's rule severity is warning. A blocking exception can never be waived.
-- period_approved: allowed only when no PayrollInput of the period is still in status calculated. Every input is approved, exported, or flagged and held back from export.
-- period_validation_started and period_approved move PayPeriod.status from open to validating and from validating to approved.
-- Every change of status on PayPeriod, PayrollInput and Exception has exactly one Approval row (or a PayrollExport row for exported), so history is never overwritten.
+- An input gets an Approval row only when it has no open blocking exception. Held inputs never get one.
+- About 3% of eligible inputs have no decision yet. They stay in status validated and are never exported.
+- An input can be exported only if it has exactly one approved decision (checked by `exported_only_if_approved_once`).
+- Each decision moves the input to approved or rejected, and the move is a row in `status_events`.
+
+
 
 
 ## PayrollExport
