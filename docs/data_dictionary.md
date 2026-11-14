@@ -28,3 +28,23 @@ Notes:
 - Bank and tax fields are optional on purpose. The workflow checks for them before export, so a baseline row can lack them only when a ground-truth label says so.
 - manager_id gives the approval chain, because an employee's time and leave are approved by their manager and payroll inputs by an hr_partner.
 - Bank accounts and tax IDs use fictional formats, so no real person or account can match them.
+
+
+## PayGroup
+Master table. A pay group defines the pay rules shared by its employees. Employee.pay_group_id points here (1:N from PayGroup to Employee).
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| pay_group_id | string | yes | PG-001 | PK | matches ^PG-\d{3}$, immutable |
+| name | string | yes | e.g. Corporate, Operations, Contract | yes | non-empty |
+| pay_frequency | enum | yes | monthly | no | one of the allowed values |
+| standard_hours_per_day | decimal(4,2) | yes | hours | no | greater than 0 and at most 12 |
+| max_hours_per_period | decimal(6,2) | yes | hours per pay period | no | greater than 0; hours above this are flagged as exceeding the period maximum |
+| overtime_multiplier | decimal(3,2) | yes | multiple of the hourly rate | no | at least 1.00 |
+| payday_day | integer | yes | 1 to 28 | no | day of the month after the period ends on which pay is released |
+| effective_from | date | yes | YYYY-MM-DD | no | on or before the first pay period start |
+| status | enum | yes | active, inactive | no | one of the allowed values |
+
+Notes:
+- All three pay groups are active for the whole data period. Pay rule changes would be new rows with a later effective_from, never edits to an old row.
+- Whether an employee is paid hourly or a fixed salary is on Employee (pay_type), not here, so each group can mix both.
