@@ -274,6 +274,42 @@ Event table, append-only. One row per payroll-level decision. Source-record appr
 Rules:
 - payroll_input_approved: the input must have status calculated, no open blocking exceptions, and every source record it used must be approved. decided_by must not be the input's own employee_id.
 - exception_waived: allowed only when the exception's rule severity is warning. A blocking exception can never be waived.
-- period_approved: allowed only when every PayrollInput of the period is approved or exported.
+- period_approved: allowed only when no PayrollInput of the period is still in status calculated. Every input is approved, exported, or flagged and held back from export.
 - period_validation_started and period_approved move PayPeriod.status from open to validating and from validating to approved.
 - Every change of status on PayPeriod, PayrollInput and Exception has exactly one Approval row (or a PayrollExport row for exported), so history is never overwritten.
+
+
+## PayrollExport
+Event table. One row per export batch for a pay period. Only approved payroll inputs with no open blocking exceptions are included. A period can have several batches, because inputs held back by an exception can be exported later; each payroll input appears in at most one batch. Rows are never edited.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| export_id | string | yes | PEX-2026-000001 | PK | matches ^PEX-\d{4}-\d{6}$, immutable |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod; the period's status must be approved or exported at exported_at |
+| exported_by | string | yes | existing EMP- id | no | FK to Employee; must have the hr_partner role |
+| exported_at | timestamp | yes | UTC | no | on or after the latest Approval of the payroll inputs it contains |
+| record_count | integer | yes | count | no | equals the number of PayrollExportLine rows for this export |
+| total_gross | decimal(14,2) | yes | INR | no | equals the sum of gross_pay of its lines' payroll inputs |
+| total_deductions | decimal(14,2) | yes | INR | no | equals the sum of deductions_total of its lines' payroll inputs |
+| total_net | decimal(14,2) | yes | INR | no | equals total_gross - total_deductions and the sum of its lines' net_pay |
+| status | enum | yes | completed | no | one of the allowed values |
+
+Rules:
+- The export gate runs rules VR-009 and VR-010 again at export time, so no unapproved source record and no non-reconciling total can leave the system.
+- Exporting a batch moves each included PayrollInput to exported. When the first batch of a period is created, the period's status moves from approved to exported and stays there.
+- The anomaly "payroll totals fail to reconcile" is a batch whose totals differ from the sum of its lines or inputs.
+
+## PayrollExportLine
+Supporting table (not in the statement's core entity list). One row per payroll input in an export batch (1:N from PayrollExport, and 1:0..1 from PayrollInput). It makes every exported amount traceable and lets validate.py reconcile the batch.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| export_line_id | string | yes | PXL-000001 | PK | matches ^PXL-\d{6}$, immutable |
+| export_id | string | yes | existing PEX- id | no | FK to PayrollExport |
+| payroll_input_id | string | yes | existing PIN- id | yes | FK to PayrollInput; a payroll input appears in at most one line |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; equals the payroll input's employee |
+| gross_pay | decimal(12,2) | yes | INR | no | equals the payroll input's gross_pay at export time |
+| deductions_total | decimal(12,2) | yes | INR | no | equals the payroll input's deductions_total at export time |
+| net_pay | decimal(12,2) | yes | INR | no | equals gross_pay - deductions_total and the payroll input's net_pay |
+
+Rule: the payroll input must have status approved when the line is created, and must have a payroll_input_approved Approval row. The anomaly "unapproved time exported" is a line whose payroll input used an unapproved time entry.
