@@ -117,3 +117,7 @@ WARNING_WAIVE_RATE = 0.50              # warning exceptions waived by an HR part
 
 # ------------------------------------------------------------- time entries
 ABSENCE_RATE = 0.04                    # working days an hourly employee has no entry
+
+
+# -------------------------------------------------------------------- leave
+LEAVE_CORRECTION_RATE = 0.05           # share of approved leave records with a correction
