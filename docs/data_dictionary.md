@@ -185,3 +185,44 @@ Reconciliation rules (checked by validate.py):
 - For each pay period, the sum of net_pay over exported rows equals the total of its PayrollExport.
 - Source records that are pending, rejected, or superseded by a correction never contribute to any total.
 
+
+
+## ValidationRule
+Master table. The catalogue of validation checks run before payroll export. One row per rule version. Rows are never edited: a change to a rule or its threshold is a new row with a later effective_from, and the old row is set to retired by that new row's existence (the status of the old row is not rewritten; the current rule is the one with the latest effective_from per rule_code).
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| rule_id | string | yes | VR-001 | PK | matches ^VR-\d{3}$, immutable |
+| rule_code | string | yes | UPPER_SNAKE_CASE, e.g. HOURS_EXCEED_PERIOD_MAX | no | unique together with effective_from |
+| name | string | yes | short title | no | non-empty |
+| description | string | yes | what the rule checks, in one sentence | no | non-empty |
+| applies_to | enum | yes | employee, time_entry, leave_record, allowance, deduction, payroll_input, payroll_export | no | one of the allowed values |
+| severity | enum | yes | blocking, warning | no | one of the allowed values |
+| threshold_value | decimal(10,2) | optional | number | no | required for rules that have a limit (see catalogue), null otherwise |
+| threshold_unit | string | optional | e.g. hours, INR | no | required when threshold_value is set |
+| effective_from | date | yes | YYYY-MM-DD | no | on or before the first pay period start |
+
+Severity effect:
+- blocking: the Exception keeps the PayrollInput in flagged status, so it cannot be approved or exported until the exception is resolved.
+- warning: the Exception is recorded and reviewed, but does not stop approval or export.
+
+Initial catalogue (all effective from the first pay period start):
+
+| rule_id | rule_code | applies_to | severity | Threshold | What it checks |
+|---|---|---|---|---|---|
+| VR-001 | MISSING_BANK_DETAILS | employee | blocking | none | bank_account_number or bank_ifsc is missing |
+| VR-002 | MISSING_TAX_ID | employee | blocking | none | tax_id is missing |
+| VR-003 | DUPLICATE_HOURS | time_entry | blocking | none | a duplicate_submission exists for an employee and day that already has an original or correction |
+| VR-004 | HOURS_EXCEED_PERIOD_MAX | payroll_input | blocking | pay group's max_hours_per_period | total_hours is above the pay group maximum |
+| VR-005 | DAILY_HOURS_OUTLIER | time_entry | warning | 14 hours | one day's hours are above the threshold |
+| VR-006 | DUPLICATE_ALLOWANCE | allowance | blocking | none | more than one original allowance of the same type for an employee and period |
+| VR-007 | INELIGIBLE_ALLOWANCE | allowance | blocking | none | the employee does not meet the eligibility rule for the allowance type |
+| VR-008 | LEAVE_DEDUCTION_DUPLICATED | deduction | blocking | none | more than one unpaid_leave deduction for the same leave_id |
+| VR-009 | UNAPPROVED_SOURCE_USED | payroll_input | blocking | none | a payroll input or export includes a source record that is not approved |
+| VR-010 | TOTALS_DO_NOT_RECONCILE | payroll_input | blocking | 0.01 INR | a payroll input amount differs from the recomputed sum of its source records by more than the threshold |
+| VR-011 | NEGATIVE_NET_PAY | payroll_input | blocking | 0 INR | net_pay is below zero |
+| VR-012 | LATE_SUBMISSION | time_entry | warning | none | a time entry or leave record was submitted after the period's submission_deadline |
+
+Notes:
+- The five required edge cases are detected by VR-004, VR-006, VR-009, VR-008 and VR-010.
+- VR-009 and VR-010 are re-run at export time as a second gate, so an export can never contain an unapproved source or a total that does not reconcile.
