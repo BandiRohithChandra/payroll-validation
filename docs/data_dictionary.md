@@ -118,3 +118,35 @@ Rules:
 - Effective leave is the correction if approved, otherwise the original if approved. Pending and rejected rows never count.
 - Only effective unpaid leave produces a deduction. Each effective unpaid leave record has exactly one unpaid_leave Deduction, linked by leave_id. A second one is the "leave deduction applied twice" anomaly.
 - Paid leave (annual, sick) reduces no pay.
+
+
+## Allowance
+Transaction table. One row per allowance granted to an employee for a pay period. Rows are never edited: a change is a new correction row that points to the original.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| allowance_id | string | yes | ALW-000001 | PK | matches ^ALW-\d{6}$, immutable |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; must be eligible for the allowance type (see rules) |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
+| allowance_type | enum | yes | transport, meal, remote_work, shift | no | one of the allowed values |
+| units | integer | yes | count (days or 1) | no | at least 1; for meal and shift equals the days with effective time entries in the period |
+| unit_amount | decimal(10,2) | yes | INR per unit | no | equals the configured rate for the allowance type |
+| amount | decimal(12,2) | yes | INR | no | equals units x unit_amount |
+| entry_type | enum | yes | original, correction | no | one of the allowed values |
+| related_allowance_id | string | optional | existing ALW- id | no | FK to Allowance (self); required for correction and null for original; must point to an original of the same employee, period and type |
+| created_at | timestamp | yes | UTC | no | on or after the pay period start |
+| approval_status | enum | yes | approved, pending, rejected | no | one of the allowed values; set when the row is created |
+| approved_by | string | optional | existing EMP- id | no | FK to Employee; required when approved or rejected; must be the employee's manager_id |
+| approved_at | timestamp | optional | UTC | no | required when approved_by is set; on or after created_at |
+
+Eligibility rules (defined in config.py and decisions.md, checked by a validation rule):
+- transport: all active employees, 1 unit per period, INR 2,000.
+- meal: hourly employees only, 1 unit per day worked, INR 100.
+- remote_work: salaried employees in the Corporate pay group, 1 unit per period, INR 1,500.
+- shift: hourly employees in the Operations pay group, 1 unit per day worked, INR 250.
+
+Uniqueness rules beyond the primary key:
+- At most one original per (employee_id, pay_period_id, allowance_type). A second original is the "same allowance duplicated" anomaly.
+- At most one correction per original.
+
+Effective allowance: the correction if approved, otherwise the original if approved. Pending and rejected rows never count toward payroll.
