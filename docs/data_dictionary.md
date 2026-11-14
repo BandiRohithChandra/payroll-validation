@@ -92,3 +92,29 @@ Uniqueness rules beyond the primary key:
 - At most one correction per original entry.
 
 Effective hours for an employee on a day: the correction if it is approved, otherwise the original if it is approved. A duplicate_submission never counts toward hours. Duplicates are expected in the baseline data and are caught by the duplicate-hours validation rule. Overtime is calculated during aggregation, never stored here.
+
+
+## LeaveRecord
+Transaction table. One row per leave request for a salaried employee, always inside a single pay period. Rows are never edited: a change is a new correction row that points to the original.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| leave_id | string | yes | LV-000001 | PK | matches ^LV-\d{6}$, immutable |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; the employee's pay_type must be salaried |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod; start_date and end_date must both fall inside the period |
+| leave_type | enum | yes | annual, sick, unpaid | no | one of the allowed values |
+| start_date | date | yes | YYYY-MM-DD | no | on or after hire_date and not after termination_date |
+| end_date | date | yes | YYYY-MM-DD | no | on or after start_date |
+| days | integer | yes | working days (Monday to Friday) | no | equals the number of working days from start_date to end_date inclusive; at least 1 |
+| entry_type | enum | yes | original, correction | no | one of the allowed values |
+| related_leave_id | string | optional | existing LV- id | no | FK to LeaveRecord (self); required for correction and null for original; must point to an original record of the same employee |
+| submitted_at | timestamp | yes | UTC | no | a late submission is one after the period's submission_deadline |
+| approval_status | enum | yes | approved, pending, rejected | no | one of the allowed values; set when the row is created |
+| approved_by | string | optional | existing EMP- id | no | FK to Employee; required when approved or rejected; must be the employee's manager_id |
+| approved_at | timestamp | optional | UTC | no | required when approved_by is set; on or after submitted_at |
+
+Rules:
+- Approved leave records of one employee must not overlap in dates, apart from a correction replacing its original.
+- Effective leave is the correction if approved, otherwise the original if approved. Pending and rejected rows never count.
+- Only effective unpaid leave produces a deduction. Each effective unpaid leave record has exactly one unpaid_leave Deduction, linked by leave_id. A second one is the "leave deduction applied twice" anomaly.
+- Paid leave (annual, sick) reduces no pay.
