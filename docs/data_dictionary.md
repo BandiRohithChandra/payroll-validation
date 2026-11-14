@@ -226,3 +226,32 @@ Initial catalogue (all effective from the first pay period start):
 Notes:
 - The five required edge cases are detected by VR-004, VR-006, VR-009, VR-008 and VR-010.
 - VR-009 and VR-010 are re-run at export time as a second gate, so an export can never contain an unapproved source or a total that does not reconcile.
+
+
+## Exception
+Event table. One row per finding raised by a validation rule on a source record. The row holds the current status only; each change of status is recorded as an Approval row, so history is never overwritten.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| exception_id | string | yes | EXC-000001 | PK | matches ^EXC-\d{6}$, immutable |
+| rule_id | string | yes | existing VR- id | no | FK to ValidationRule; the rule version in force at detected_at |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
+| payroll_input_id | string | optional | existing PIN- id | no | FK to PayrollInput; required when the exception blocks a payroll input, null for employee-level findings that exist before any input is built |
+| source_table | enum | yes | employees, time_entries, leave_records, allowances, deductions, payroll_inputs, payroll_exports | no | one of the allowed values; must match the rule's applies_to |
+| source_record_id | string | yes | id of the flagged record | no | must exist in source_table; checked by validate.py |
+| detected_at | timestamp | yes | UTC | no | on or after the pay period's end_date |
+| detail | string | yes | one sentence with the values that triggered the rule | no | non-empty |
+| status | enum | yes | open, resolved, waived | no | one of the allowed values; see lifecycle |
+
+Lifecycle: open -> resolved, or open -> waived. Each move creates an Approval row of type exception_resolved or exception_waived, so the status is the current state and the history is in Approval.
+- resolved: the underlying data was fixed (a correction or rejection was recorded) and the rule passes on re-run.
+- waived: allowed only when the rule's severity is warning, and only by an hr_partner.
+- A blocking exception can never be waived.
+
+Uniqueness rules beyond the primary key:
+- At most one open Exception per (rule_id, source_record_id). A re-run of the rules must not create a second open copy of the same finding.
+
+Effect on payroll:
+- A PayrollInput with at least one open blocking Exception has status flagged and cannot be approved or exported.
+- When the last open blocking Exception is resolved, the PayrollInput returns to calculated and is recomputed.
