@@ -1,0 +1,4 @@
+pay_group_id,name,pay_frequency,standard_hours_per_day,max_hours_per_period,overtime_multiplier,payday_day,effective_from,status
+PG-001,Corporate,monthly,8.00,210.00,1.50,5,2026-01-01,active
+PG-002,Operations,monthly,8.00,230.00,2.00,7,2026-01-01,active
+PG-003,Contract,monthly,8.00,200.00,1.25,10,2026-01-01,active
