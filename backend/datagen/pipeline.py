@@ -11,6 +11,7 @@ from datagen.pay_items import generate_allowances, generate_deductions
 from datagen.payroll import aggregate_payroll_inputs
 from datagen.rules import RULES, run_validation
 from datagen.time_entries import generate_time_entries
+from datagen.workflow import run_workflow, summarize
 
 
 def build_dataset(scale_name="starter", seed=config.SEED):
@@ -31,12 +32,16 @@ def build_dataset(scale_name="starter", seed=config.SEED):
 
     truth = p_emp + p_time + src_truth + in_truth
     findings = run_validation(employees, time_entries, allowances, deductions, payroll_inputs)
+
+    pay_groups, pay_periods = generate_pay_groups(), generate_pay_periods()
+    flow = run_workflow(rng, ids, employees, time_entries, allowances, deductions,
+                        payroll_inputs, pay_periods, findings)
     return {
-        "pay_groups": generate_pay_groups(), "pay_periods": generate_pay_periods(),
+        "pay_groups": pay_groups, "pay_periods": pay_periods,
         "employees": employees, "time_entries": time_entries, "leaves": leaves,
         "allowances": allowances, "deductions": deductions,
         "payroll_inputs": payroll_inputs, "validation_rules": RULES,
-        "findings": findings, "truth": truth,
+        "findings": findings, "truth": truth, **flow,
     }
 
 
@@ -46,3 +51,7 @@ if __name__ == "__main__":
     print({k: len(v) for k, v in data.items()})
     for row in evaluate(data["findings"], data["truth"]):
         print(row)
+    print(summarize(data["payroll_inputs"], data["exceptions"], data["payroll_exports"]))
+    exported = [r for r in data["payroll_inputs"] if r["status"] == "exported"]
+    print("exported with unapproved source rows:",
+          sum(r["unapproved_source_count"] > 0 for r in exported))

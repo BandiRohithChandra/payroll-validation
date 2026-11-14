@@ -31,7 +31,7 @@ def counted_time_entries(time_entries, force_unapproved=frozenset()):
 
 
 def aggregate_payroll_inputs(employees, time_entries, allowances, deductions,
-                             force_unapproved=frozenset()):
+                             force_unapproved=frozenset(), exclude_ids=frozenset()):
     counted = counted_time_entries(time_entries, force_unapproved)
     entries = defaultdict(list)
     for e in counted.values():
@@ -39,10 +39,10 @@ def aggregate_payroll_inputs(employees, time_entries, allowances, deductions,
 
     allow, ded = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
     for a in allowances:
-        if a["approval_status"] == "approved":
+        if a["approval_status"] == "approved" and a["allowance_id"] not in exclude_ids:
             allow[(a["employee_id"], a["pay_period_id"])] += a["amount"]
     for d in deductions:
-        if d["approval_status"] == "approved":
+        if d["approval_status"] == "approved" and d["deduction_id"] not in exclude_ids:
             ded[(d["employee_id"], d["pay_period_id"])] += d["amount"]
 
     rows = []

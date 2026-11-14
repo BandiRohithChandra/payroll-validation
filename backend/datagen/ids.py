@@ -16,6 +16,7 @@ _FORMATS = {
     "approval": ("APR-{n:06d}", r"^APR-\d{6}$"),
     "export": (f"PEX-{YEAR}-{{n:06d}}", r"^PEX-\d{4}-\d{6}$"),
     "export_line": ("PXL-{n:06d}", r"^PXL-\d{6}$"),
+    "event": ("EVT-{n:06d}", r"^EVT-\d{6}$"),
 }
 
 # kinds built from other ids, not from a counter
@@ -56,3 +57,4 @@ class IdGenerator:
 def is_valid(kind: str, value: str) -> bool:
     pattern = _FORMATS[kind][1] if kind in _FORMATS else _COMPOSED[kind]
     return re.match(pattern, value) is not None
+
