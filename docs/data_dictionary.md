@@ -48,3 +48,23 @@ Master table. A pay group defines the pay rules shared by its employees. Employe
 Notes:
 - All three pay groups are active for the whole data period. Pay rule changes would be new rows with a later effective_from, never edits to an old row.
 - Whether an employee is paid hourly or a fixed salary is on Employee (pay_type), not here, so each group can mix both.
+
+
+
+## PayPeriod
+Master table. One shared monthly calendar for all pay groups (3 rows: 2026-01, 2026-02, 2026-03). Each period is a parent of the time, leave, allowance, deduction, payroll input and export records for that month.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| pay_period_id | string | yes | PP-2026-01 | PK | matches ^PP-\d{4}-\d{2}$, immutable |
+| start_date | date | yes | YYYY-MM-DD | yes | first day of the month |
+| end_date | date | yes | YYYY-MM-DD | yes | last day of the month; after start_date |
+| working_days | integer | yes | days | no | Monday to Friday days in the period; greater than 0 |
+| submission_deadline | date | yes | YYYY-MM-DD | no | after end_date; time and leave entered after this are late |
+| status | enum | yes | open, validating, approved, exported | no | one of the allowed values; moves forward only |
+
+Lifecycle: open -> validating -> approved -> exported. A period can only be exported after it is approved. Each move is recorded as an Approval or PayrollExport row, so the history is never overwritten and status only shows the current state.
+
+Notes:
+- Periods must not overlap and must follow each other without gaps.
+- Overtime and hour limits are per pay group (max_hours_per_period on PayGroup), not per period.
