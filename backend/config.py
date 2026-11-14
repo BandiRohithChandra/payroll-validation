@@ -113,3 +113,7 @@ MIN_NET_PAY = Decimal("0.00")
 # ------------------------------------------------- exceptions and export
 BLOCKING_RESOLVE_RATE = 0.85           # blocking exceptions fixed by a correction or rejection
 WARNING_WAIVE_RATE = 0.50              # warning exceptions waived by an HR partner
+
+
+# ------------------------------------------------------------- time entries
+ABSENCE_RATE = 0.04                    # working days an hourly employee has no entry
