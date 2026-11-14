@@ -150,3 +150,4 @@ Uniqueness rules beyond the primary key:
 - At most one correction per original.
 
 Effective allowance: the correction if approved, otherwise the original if approved. Pending and rejected rows never count toward payroll.
+
