@@ -1,6 +1,6 @@
 # Data Dictionary
 
-All data is synthetic, including identities and bank and tax details. IDs are immutable and zero-padded. Timestamps are UTC ISO 8601, dates are YYYY-MM-DD, and money is in INR with 2 decimals.
+All data is synthetic, including identities and bank and tax details. IDs are immutable and zero-padded. Timestamps are UTC, written as `YYYY-MM-DD HH:MM:SS`, dates are `YYYY-MM-DD`, and money is in INR with 2 decimals.
 
 ## Employee
 Master table. One row per employee. Pay group changes and other history are kept as events in later tables, so this row holds the current state only.
@@ -12,12 +12,12 @@ Master table. One row per employee. Pay group changes and other history are kept
 | last_name | string | yes | synthetic name list | no | non-empty |
 | email | string | yes | synthetic, @example.com | yes | valid format, lowercase |
 | role | enum | yes | employee, manager, hr_partner | no | one of the allowed values |
-| manager_id | string | optional | existing EMP- id | no | FK to Employee (self); null for top-level managers; cannot be the employee's own id |
+| manager_id | string | optional | existing EMP- id | no | FK to Employee (self); null only for the head manager of each pay group (3 rows); cannot be the employee's own id |
 | pay_group_id | string | yes | existing PG- id | no | FK to PayGroup |
 | pay_type | enum | yes | hourly, salaried | no | one of the allowed values |
 | hourly_rate | decimal(10,2) | optional | INR per hour | no | required and greater than 0 when pay_type is hourly, null otherwise |
 | monthly_salary | decimal(12,2) | optional | INR per month | no | required and greater than 0 when pay_type is salaried, null otherwise |
-| hire_date | date | yes | YYYY-MM-DD | no | before the first pay period start for staff hired before the data begins |
+| hire_date | date | yes | YYYY-MM-DD | no | between 2018-01-01 and 2025-12-31 for most staff; about 1% are hired during the first two months of the data, and those have no time or pay before their hire date |
 | termination_date | date | optional | YYYY-MM-DD | no | null for active staff; after hire_date when set |
 | status | enum | yes | active, terminated | no | terminated if and only if termination_date is set |
 | bank_account_number | string | optional | synthetic, 12 digits | no | required before a payroll export; a missing value is a planted validation case |
@@ -28,6 +28,7 @@ Notes:
 - Bank and tax fields are optional on purpose. The workflow checks for them before export, so a baseline row can lack them only when a ground-truth label says so.
 - manager_id gives the approval chain, because an employee's time and leave are approved by their manager and payroll inputs by an hr_partner.
 - Bank accounts and tax IDs use fictional formats, so no real person or account can match them.
+- HR partners all belong to the Corporate pay group. About 1% of employees are terminated during the data period (their termination_date falls between 5 Feb and 21 Mar 2026), and they have no payroll input after the month they leave.
 
 
 ## PayGroup
@@ -79,10 +80,13 @@ Transaction table. One row per hours submission by an hourly employee. Rows are 
 | employee_id | string | yes | existing EMP- id | no | FK to Employee; the employee's pay_type must be hourly |
 | pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod; work_date must fall inside the period |
 | work_date | date | yes | YYYY-MM-DD | no | on or after hire_date and not after termination_date |
-| hours_worked | decimal(4,2) | yes | hours | no | greater than 0 and at most 24 |
-| entry_type | enum | yes | original, correction, duplicate_submission | no | one of the allowed values |
+| hours_worked | decimal(4,2) | yes | hours | no | greater than 0 and at most 24; baseline entries are between 5 and 12 hours, planted daily outliers are 14.25 to 18.00 |
+
+
 | related_entry_id | string | optional | existing TIME- id | no | FK to TimeEntry (self); required for correction and duplicate_submission and null for original; must point to an original entry of the same employee and work_date |
-| submitted_at | timestamp | yes | UTC | no | on or after work_date; a submission after the period's submission_deadline is late |
+| submitted_at | timestamp | yes | UTC | no | 1 to 10 days before start_date for originals, so it can fall before the period starts; leave submissions are not checked by a validation rule |
+
+
 | approval_status | enum | yes | approved, pending, rejected | no | one of the allowed values; set when the row is created |
 | approved_by | string | optional | existing EMP- id | no | FK to Employee; required when approved or rejected; must be the employee's manager_id |
 | approved_at | timestamp | optional | UTC | no | required when approved_by is set; on or after submitted_at |
@@ -92,6 +96,8 @@ Uniqueness rules beyond the primary key:
 - At most one correction per original entry.
 
 Effective hours for an employee on a day: the correction if it is approved, otherwise the original if it is approved. A duplicate_submission never counts toward hours. Duplicates are expected in the baseline data and are caught by the duplicate-hours validation rule. Overtime is calculated during aggregation, never stored here.
+
+Injected anomaly: for the "hours exceed period maximum" cases, the generator sets `hours_worked` to 12.00 on the effective rows of the chosen employee-period before payroll inputs are built. This is a labelled edit made at generation time (ground truth lists the payroll input), not a later overwrite.
 
 
 ## LeaveRecord
@@ -311,38 +317,93 @@ Rules:
 
 
 
-
 ## PayrollExport
-Event table. One row per export batch for a pay period. Only approved payroll inputs with no open blocking exceptions are included. A period can have several batches, because inputs held back by an exception can be exported later; each payroll input appears in at most one batch. Rows are never edited.
+Event table. One row per export for a pay period (3 rows). Only approved payroll inputs without open blocking exceptions are included. Rows are never edited.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
-| export_id | string | yes | PEX-2026-000001 | PK | matches ^PEX-\d{4}-\d{6}$, immutable |
-| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod; the period's status must be approved or exported at exported_at |
-| exported_by | string | yes | existing EMP- id | no | FK to Employee; must have the hr_partner role |
-| exported_at | timestamp | yes | UTC | no | on or after the latest Approval of the payroll inputs it contains |
-| record_count | integer | yes | count | no | equals the number of PayrollExportLine rows for this export |
-| total_gross | decimal(14,2) | yes | INR | no | equals the sum of gross_pay of its lines' payroll inputs |
-| total_deductions | decimal(14,2) | yes | INR | no | equals the sum of deductions_total of its lines' payroll inputs |
-| total_net | decimal(14,2) | yes | INR | no | equals total_gross - total_deductions and the sum of its lines' net_pay |
-| status | enum | yes | completed | no | one of the allowed values |
+| export_id | string | yes | PEX-2026-000001 | PK | matches ^PEX-\d{4}-\d{6}$; the counter increases across periods; immutable |
+| pay_period_id | string | yes | existing PP- id | yes | FK to PayPeriod; one export per period |
+| status | enum | yes | generated | no | one of the allowed values |
+| record_count | integer | yes | count | no | equals the number of export lines with this export_id |
+| total_gross | decimal(14,2) | yes | INR | no | equals the sum of gross_pay of its lines |
+| total_net | decimal(14,2) | yes | INR | no | equals the sum of net_pay of its lines |
+| reconciliation_status | enum | yes | reconciled | no | the generator computes the line sums against the totals; a mismatch would fail the allowed-values check |
+| generated_at | timestamp | yes | UTC | no | after the latest approval of the inputs it contains |
+| generated_by | string | yes | SYSTEM | no | the export is a system step, so this is not an Employee id and has no foreign key |
 
 Rules:
-- The export gate runs rules VR-009 and VR-010 again at export time, so no unapproved source record and no non-reconciling total can leave the system.
-- Exporting a batch moves each included PayrollInput to exported. When the first batch of a period is created, the period's status moves from approved to exported and stays there.
-- The anomaly "payroll totals fail to reconcile" is a batch whose totals differ from the sum of its lines or inputs.
+- An input is exported only when its status is approved: it has exactly one approved Approval row, no open blocking exception of its own or on its employee, and `unapproved_source_count` of 0.
+- Held, rejected and undecided inputs are never exported. The pipeline excludes them by construction, and `validate_dataset.py` checks the result afterwards (checks `exported_only_if_approved_once`, `no_export_with_open_blocking_exception` and `exported_inputs_reconcile_to_source`).
+- The injected defects are caught by VR-004, VR-006 to VR-009 before export. Those that are corrected are recomputed first, so exported figures are correct. Those that are not corrected stay held.
+- Exporting moves each input from approved to exported and the period from open to exported. Both moves are rows in `status_events`.
 
 ## PayrollExportLine
-Supporting table (not in the statement's core entity list). One row per payroll input in an export batch (1:N from PayrollExport, and 1:0..1 from PayrollInput). It makes every exported amount traceable and lets validate.py reconcile the batch.
+Supporting table. One row per exported payroll input. It makes every exported amount traceable and lets the export totals be reconciled.
 
 | Field | Type | Required | Allowed / format | Unique | Validation |
 |---|---|---|---|---|---|
 | export_line_id | string | yes | PXL-000001 | PK | matches ^PXL-\d{6}$, immutable |
 | export_id | string | yes | existing PEX- id | no | FK to PayrollExport |
-| payroll_input_id | string | yes | existing PIN- id | yes | FK to PayrollInput; a payroll input appears in at most one line |
-| employee_id | string | yes | existing EMP- id | no | FK to Employee; equals the payroll input's employee |
-| gross_pay | decimal(12,2) | yes | INR | no | equals the payroll input's gross_pay at export time |
-| deductions_total | decimal(12,2) | yes | INR | no | equals the payroll input's deductions_total at export time |
-| net_pay | decimal(12,2) | yes | INR | no | equals gross_pay - deductions_total and the payroll input's net_pay |
+| payroll_input_id | string | yes | existing PIN- id | yes | FK to PayrollInput; an input appears in at most one line, and only when its status is exported |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; equals the input's employee |
+| bank_account_number | string | yes | 12 digits | no | copied from Employee at export time; never empty |
+| bank_ifsc | string | yes | 4 letters + 0 + 6 digits | no | copied from Employee at export time; never empty |
+| gross_pay | decimal(12,2) | yes | INR | no | equals the payroll input's gross_pay |
+| net_pay | decimal(12,2) | yes | INR | no | equals the payroll input's net_pay |
 
-Rule: the payroll input must have status approved when the line is created, and must have a payroll_input_approved Approval row. The anomaly "unapproved time exported" is a line whose payroll input used an unapproved time entry.
+The employee's tax_id must also be present for every line (checked by `export_lines_have_bank_and_tax`).
+
+## status_events
+Event table, append-only. Every state change of a payroll input, an exception and a pay period is a row here, so history is never overwritten. The current status on the entity row is always equal to the last event.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| event_id | string | yes | EVT-000001 | PK | matches ^EVT-\d{6}$, immutable |
+| entity_type | enum | yes | payroll_input, exception, pay_period | no | one of the allowed values |
+| entity_id | string | yes | PIN-, EXC- or PP- id | no | must exist in the entity's table (not a database foreign key, because the table depends on entity_type) |
+| from_status | string | optional | status value | no | null for the first event of an entity; otherwise equals the previous event's to_status |
+| to_status | string | yes | status value | no | the transition must be in the allowed list below |
+| event_at | timestamp | yes | UTC | no | not before the previous event of the same entity |
+| actor_id | string | yes | EMP- id or SYSTEM | no | an hr_partner for corrections, approvals and waivers; SYSTEM for automatic steps |
+| note | string | optional | free text | no | rule ids for held, net_pay before and after for corrections, export id for exported |
+
+Allowed transitions:
+- payroll_input: (none) -> draft, draft -> validated, validated -> validated (a correction), validated -> held, validated -> approved, validated -> rejected, approved -> exported.
+- exception: (none) -> open, open -> resolved, open -> waived.
+- pay_period: open -> exported.
+
+Checked by `lifecycle_transitions_and_event_order`.
+
+## Relationships and cardinality
+
+| Relationship | Cardinality | Optional? | Notes |
+|---|---|---|---|
+| PayGroup to Employee | 1:N | no | every employee has one pay group |
+| Employee to Employee (manager_id) | 1:N | yes | null only for each pay group's head manager |
+| Employee to TimeEntry, LeaveRecord, Allowance, Deduction | 1:N | yes | time entries only for hourly staff, leave only for salaried staff |
+| PayPeriod to TimeEntry, LeaveRecord, Allowance, Deduction | 1:N | no | |
+| Employee and PayPeriod to PayrollInput | N:M, resolved by PayrollInput (bridge) | no | one input per employee per period in which the employee was active |
+| TimeEntry to TimeEntry (related_entry_id) | 1:0..1 correction, 1:0..1 duplicate | yes | corrections and duplicates point to the original |
+| LeaveRecord to Deduction (leave_id) | 1:0..1 expected | yes | one unpaid_leave deduction per effective unpaid leave record; a second one is the injected anomaly |
+| ValidationRule to Exception | 1:N | no | |
+| PayrollInput to Exception | 1:N | yes | null for employee-level findings (VR-001, VR-002) |
+| PayrollInput to Approval | 1:0..1 | yes | held and undecided inputs have none |
+| PayrollExport to PayrollExportLine | 1:N | no | |
+| PayrollInput to PayrollExportLine | 1:0..1 | yes | only exported inputs have a line, so the line is the link between an input and an export |
+| PayPeriod to PayrollExport | 1:1 | no | |
+
+Effective dates: PayGroup, ValidationRule and the pay period calendar carry `effective_from` or start and end dates. A rule or pay group change would be a new row with a later date, never an edit.
+
+## Ground truth (file, not a table)
+`data/<scale>/ground_truth/ground_truth.csv` and `.json`. One row per (record, rule). It is generated beside the data and never joined into any input table.
+
+| Field | Type | Meaning |
+|---|---|---|
+| issue_type | string | e.g. duplicate_allowance, hours_exceed_period_max, missing_bank_details |
+| table_name | string | table of the labelled record |
+| record_id | string | id of the labelled record (a payroll input id for aggregate-level cases) |
+| expected_rule | string | the VR- rule that must flag the record |
+| expected_decision | enum | block_export for blocking rules, warn for warnings |
+| injected | boolean | true for the five injected edge cases, false for natural baseline cases |
+| note | string | short explanation |
