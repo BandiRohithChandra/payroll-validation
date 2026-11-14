@@ -151,3 +151,37 @@ Uniqueness rules beyond the primary key:
 
 Effective allowance: the correction if approved, otherwise the original if approved. Pending and rejected rows never count toward payroll.
 
+
+## PayrollInput
+Derived table. One row per employee per pay period, aggregated from the effective approved source records. No value is generated independently, and every amount can be recomputed from the source tables.
+
+| Field | Type | Required | Allowed / format | Unique | Validation |
+|---|---|---|---|---|---|
+| payroll_input_id | string | yes | PIN-EMP-000001-2026-01 | PK | matches ^PIN-EMP-\d{6}-\d{4}-\d{2}$; must equal PIN-<employee_id>-<year>-<month of the period>; immutable |
+| employee_id | string | yes | existing EMP- id | no | FK to Employee; unique together with pay_period_id |
+| pay_period_id | string | yes | existing PP- id | no | FK to PayPeriod |
+| pay_group_id | string | yes | existing PG- id | no | FK to PayGroup; the employee's pay group for this period |
+| pay_type | enum | yes | hourly, salaried | no | equals the employee's pay_type |
+| regular_hours | decimal(6,2) | yes | hours | no | sum over effective approved time entries of min(hours, standard_hours_per_day) per day; 0 for salaried |
+| overtime_hours | decimal(6,2) | yes | hours | no | sum of hours above standard_hours_per_day per day; 0 for salaried |
+| total_hours | decimal(6,2) | yes | hours | no | equals regular_hours + overtime_hours; flagged when above the pay group's max_hours_per_period |
+| base_pay | decimal(12,2) | yes | INR | no | hourly: regular_hours x hourly_rate; salaried: monthly_salary |
+| overtime_pay | decimal(12,2) | yes | INR | no | overtime_hours x hourly_rate x overtime_multiplier; 0 for salaried |
+| allowances_total | decimal(12,2) | yes | INR | no | sum of effective approved Allowance amounts |
+| deductions_total | decimal(12,2) | yes | INR | no | sum of effective approved Deduction amounts |
+| gross_pay | decimal(12,2) | yes | INR | no | equals base_pay + overtime_pay + allowances_total |
+| net_pay | decimal(12,2) | yes | INR | no | equals gross_pay - deductions_total; must not be negative |
+| unpaid_leave_days | decimal(5,2) | yes | days | no | sum of days of effective approved unpaid leave; for information, not subtracted again |
+| time_entry_count | integer | yes | count | no | number of effective approved time entries used |
+| allowance_count | integer | yes | count | no | number of effective approved allowances used |
+| deduction_count | integer | yes | count | no | number of effective approved deductions used |
+| status | enum | yes | calculated, flagged, approved, exported | no | one of the allowed values; moves forward only, except that flagged returns to calculated when its exceptions are resolved |
+| calculated_at | timestamp | yes | UTC | no | on or after the pay period's end_date |
+
+Lifecycle: calculated -> flagged (one or more open Exceptions) -> calculated (resolved) -> approved (HR partner Approval) -> exported (PayrollExport). A row can only become approved when it has no open exceptions and every source record it used is approved. Each transition is stored as an Approval or PayrollExport row.
+
+Reconciliation rules (checked by validate.py):
+- Every amount and count equals a fresh recomputation from the source tables.
+- For each pay period, the sum of net_pay over exported rows equals the total of its PayrollExport.
+- Source records that are pending, rejected, or superseded by a correction never contribute to any total.
+
